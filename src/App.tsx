@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { RoleProvider } from './context/RoleContext';
+import { RoleProvider, useRole } from './context/RoleContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { DataProvider } from './context/DataContext';
 import { ToastContainer } from './components/common/UIComponents';
+
+import { LoginPage } from './components/auth/LoginPage';
 
 import { AdminLayout } from './components/layout/AdminLayout';
 import { PortalLayout } from './components/layout/PortalLayout';
@@ -25,12 +27,16 @@ import { PortalPayslips } from './components/portal/PortalPayslips';
 import { PortalSalary } from './components/portal/PortalSalary';
 import { PortalTimesheets } from './components/portal/PortalTimesheets';
 
+import { UserRole, UserProfile } from './types/roles';
+
 export function AppContent() {
+  const { switchRole } = useRole();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentTab, setCurrentTab] = useState<string>('po-tracker');
   const [candidateToken, setCandidateToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check URL search params for token or path
+    // Check URL search params for candidate token
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     if (token) {
@@ -38,12 +44,29 @@ export function AppContent() {
     }
   }, []);
 
-  // CANDIDATE PORTAL ROUTE
+  // CANDIDATE PORTAL DIRECT ROUTE
   if (candidateToken) {
     return <CandidateOnboardingForm token={candidateToken} />;
   }
 
-  // EMPLOYEE PORTAL ROUTE GROUP
+  // 1. LOGIN SCREEN (Default Primary View)
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        onLoginSuccess={(role: UserRole) => {
+          switchRole(role);
+          setIsAuthenticated(true);
+          if (role === 'Employee') {
+            setCurrentTab('portal-dashboard');
+          } else {
+            setCurrentTab('po-tracker');
+          }
+        }}
+      />
+    );
+  }
+
+  // 2. EMPLOYEE PORTAL ROUTE GROUP
   if (currentTab.startsWith('portal')) {
     return (
       <PortalLayout currentTab={currentTab} onNavigate={setCurrentTab}>
@@ -64,7 +87,7 @@ export function AppContent() {
     );
   }
 
-  // ADMIN APPLICATION ROUTE GROUP
+  // 3. ADMIN APPLICATION ROUTE GROUP
   return (
     <AdminLayout currentTab={currentTab} onNavigate={setCurrentTab}>
       {currentTab === 'dashboard' && <AdminDashboardView onNavigate={setCurrentTab} />}
