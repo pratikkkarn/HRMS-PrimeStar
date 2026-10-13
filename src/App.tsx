@@ -27,12 +27,15 @@ import { PortalPayslips } from './components/portal/PortalPayslips';
 import { PortalSalary } from './components/portal/PortalSalary';
 import { PortalTimesheets } from './components/portal/PortalTimesheets';
 
+import { ProfileAccountView } from './components/profile/ProfileAccountView';
+import { SettingsView } from './components/settings/SettingsView';
+
 import { UserRole, UserProfile } from './types/roles';
 
 export function AppContent() {
   const { switchRole } = useRole();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [currentTab, setCurrentTab] = useState<string>('po-tracker');
+  const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [candidateToken, setCandidateToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,12 +62,16 @@ export function AppContent() {
           if (role === 'Employee') {
             setCurrentTab('portal-dashboard');
           } else {
-            setCurrentTab('po-tracker');
+            setCurrentTab('dashboard');
           }
         }}
       />
     );
   }
+
+  const handleSignOut = () => {
+    setIsAuthenticated(false);
+  };
 
   // 2. EMPLOYEE PORTAL ROUTE GROUP
   if (currentTab.startsWith('portal')) {
@@ -89,18 +96,27 @@ export function AppContent() {
 
   // 3. ADMIN APPLICATION ROUTE GROUP
   return (
-    <AdminLayout currentTab={currentTab} onNavigate={setCurrentTab}>
+    <AdminLayout
+      currentTab={currentTab}
+      onNavigate={setCurrentTab}
+      onSignOut={handleSignOut}
+    >
       {currentTab === 'dashboard' && <AdminDashboardView onNavigate={setCurrentTab} />}
-      {currentTab === 'po-tracker' && <POTrackerMain />}
+      {currentTab === 'po-tracker' && <POTrackerMain onNavigate={setCurrentTab} />}
       {currentTab === 'projects' && <ProjectsView />}
       {currentTab === 'invoices' && <InvoicesView />}
+      {currentTab === 'documents' && <POTrackerMain onNavigate={setCurrentTab} />}
+      {currentTab === 'assignments' && <POTrackerMain onNavigate={setCurrentTab} />}
       {currentTab === 'onboarding' && <OnboardingDashboard />}
       {currentTab === 'joining-pipeline' && <OnboardingDashboard />}
+      {currentTab === 'profile-requests' && <ProfileAccountView />}
       {currentTab === 'employees' && <EmployeesView />}
       {currentTab === 'salary-structures' && <SalaryStructuresView />}
       {currentTab === 'timesheets' && <TimesheetAdminView />}
       {currentTab === 'reports' && <ReportsView />}
+      {currentTab === 'profile' && <ProfileAccountView />}
       {currentTab === 'notifications' && <AdminDashboardView onNavigate={setCurrentTab} />}
+      {currentTab === 'settings' && <SettingsView />}
     </AdminLayout>
   );
 }

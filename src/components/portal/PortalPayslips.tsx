@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRole } from '../../context/RoleContext';
 import { useData } from '../../context/DataContext';
 import { Card, Button, Modal } from '../common/UIComponents';
 import { formatINR } from '../../lib/utils';
+import { downloadDocument, getDocumentSource } from '../../lib/documentDownloader';
+import { PdfViewer } from '../common/PdfViewer';
 import { Download, FileText, Eye } from 'lucide-react';
 
 export const PortalPayslips: React.FC = () => {
@@ -13,6 +15,26 @@ export const PortalPayslips: React.FC = () => {
   const sal = employee.salaryStructure;
 
   const [previewMonth, setPreviewMonth] = useState<string | null>(null);
+  const [docSource, setDocSource] = useState<{ url?: string; file?: Blob } | null>(null);
+
+  useEffect(() => {
+    if (!previewMonth) {
+      setDocSource(null);
+      return;
+    }
+
+    const source = getDocumentSource({
+      filename: `${previewMonth.replace(/\s+/g, '_')}_Payslip.pdf`,
+      documentType: 'payslip',
+      employeeName: employee.name,
+      employeeId: employee.employeeId,
+      month: previewMonth,
+      grossAmount: sal.grossMonthly,
+      takeHomeAmount: sal.netTakeHomeMonthly,
+    });
+
+    setDocSource(source);
+  }, [previewMonth, employee, sal]);
 
   const payslipMonths = [
     { month: 'September 2026', payDate: '30 Sep 2026', gross: sal.grossMonthly, takeHome: sal.netTakeHomeMonthly },
@@ -71,7 +93,17 @@ export const PortalPayslips: React.FC = () => {
                       size="sm"
                       variant="primary"
                       icon={<Download className="w-3.5 h-3.5" />}
-                      onClick={() => alert(`Downloading ${p.month} Payslip PDF...`)}
+                      onClick={() =>
+                        downloadDocument({
+                          filename: `${p.month.replace(/\s+/g, '_')}_Payslip.pdf`,
+                          documentType: 'payslip',
+                          employeeName: employee.name,
+                          employeeId: employee.employeeId,
+                          month: p.month,
+                          grossAmount: p.gross,
+                          takeHomeAmount: p.takeHome,
+                        })
+                      }
                     >
                       PDF
                     </Button>
@@ -89,39 +121,46 @@ export const PortalPayslips: React.FC = () => {
           isOpen={!!previewMonth}
           onClose={() => setPreviewMonth(null)}
           title={`Payslip Statement — ${previewMonth}`}
-          maxWidth="2xl"
+          maxWidth="4xl"
         >
-          <div className="p-6 bg-white border border-slate-300 rounded-xl space-y-4 text-xs font-sans">
-            <div className="flex justify-between border-b border-slate-200 pb-3">
+          <div className="space-y-4 text-xs font-sans">
+            <div className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-lg">
               <div>
-                <strong className="text-slate-900 font-bold text-sm block">PRIME STAR CONSULTING SERVICES</strong>
-                <span className="text-[10px] text-slate-500">PAYSLIP FOR {previewMonth.toUpperCase()}</span>
+                <strong className="text-slate-900 font-bold block">{employee.name} ({employee.employeeId})</strong>
+                <span className="text-[10px] text-slate-500">Official Payslip Statement — {previewMonth}</span>
               </div>
-              <div className="text-right">
-                <span className="font-bold text-slate-900 block">{employee.name}</span>
-                <span className="text-slate-500 font-mono">{employee.employeeId}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <div>
-                <span className="text-slate-500 block">Gross Earnings:</span>
-                <span className="font-bold font-mono text-slate-900">{formatINR(sal.grossMonthly)}</span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Total Deductions:</span>
-                <span className="font-bold font-mono text-red-600">{formatINR(sal.totalDeductionsMonthly)}</span>
-              </div>
-              <div className="col-span-2 pt-2 border-t border-slate-200 flex justify-between">
-                <span className="font-bold text-slate-900">Net Salary Disbursed:</span>
-                <span className="font-bold font-mono text-emerald-700 text-sm">{formatINR(sal.netTakeHomeMonthly)}</span>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button variant="primary" size="sm" icon={<Download className="w-3.5 h-3.5" />} onClick={() => alert('Downloading PDF')}>
-                Download Signed Payslip
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Download className="w-3.5 h-3.5" />}
+                onClick={() =>
+                  downloadDocument({
+                    filename: `${previewMonth.replace(/\s+/g, '_')}_Payslip.pdf`,
+                    documentType: 'payslip',
+                    employeeName: employee.name,
+                    employeeId: employee.employeeId,
+                    month: previewMonth,
+                    grossAmount: sal.grossMonthly,
+                    takeHomeAmount: sal.netTakeHomeMonthly,
+                  })
+                }
+              >
+                Download PDF
               </Button>
+            </div>
+
+            <div className="w-full h-[600px] rounded-xl overflow-hidden shadow-inner">
+              {docSource ? (
+                <PdfViewer
+                  pdfUrl={docSource.url}
+                  fileData={docSource.file}
+                  title={`Payslip — ${previewMonth}`}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-400">
+                  Loading payslip viewer...
+                </div>
+              )}
             </div>
           </div>
         </Modal>

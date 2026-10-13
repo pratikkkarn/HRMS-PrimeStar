@@ -81,6 +81,15 @@ export const CandidateOnboardingForm: React.FC<{ token: string }> = ({ token }) 
               <span className="font-semibold text-slate-800">{candidate.designation}</span>
             </div>
           </div>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => {
+              window.location.search = '';
+            }}
+          >
+            Return to HR Admin Application
+          </Button>
         </div>
       </CandidateLayout>
     );
@@ -107,7 +116,16 @@ export const CandidateOnboardingForm: React.FC<{ token: string }> = ({ token }) 
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleSaveProgress}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                window.location.search = '';
+              }}
+            >
+              Back to Admin
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleSaveProgress}>
               {saveToast ? 'Progress Saved!' : 'Save & Resume Later'}
             </Button>
           </div>

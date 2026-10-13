@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { PurchaseOrder } from '../../../types/domain';
+import React, { useState, useEffect } from 'react';
+import { PurchaseOrder, Invoice } from '../../../types/domain';
 import { useData } from '../../../context/DataContext';
 import { useRole } from '../../../context/RoleContext';
 import { Badge, Button, Card, Modal } from '../../common/UIComponents';
 import { formatINR, formatDate, getDaysRemaining } from '../../../lib/utils';
+import { getPOCounts } from '../../../lib/poUtils';
+import { downloadDocument, getDocumentSource } from '../../../lib/documentDownloader';
+import { PdfViewer } from '../../common/PdfViewer';
 import {
   FileText,
   DollarSign,
@@ -30,7 +33,7 @@ interface PODetailPageProps {
 }
 
 export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
-  const { cancelInvoice, unassignEmployeeFromPO } = useData();
+  const { cancelInvoice, updateInvoiceStatus, unassignEmployeeFromPO } = useData();
   const { permissions } = useRole();
 
   const [activeTab, setActiveTab] = useState<
@@ -40,9 +43,39 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [renewalModalOpen, setRenewalModalOpen] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [previewDocName, setPreviewDocName] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{
+    name: string;
+    type: 'sow' | 'po' | 'quotation' | 'invoice' | 'generic';
+    invoice?: Invoice;
+  } | null>(null);
+  const [docSource, setDocSource] = useState<{
+    url?: string;
+    file?: Blob;
+    isRealFile: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!previewDoc) {
+      setDocSource(null);
+      return;
+    }
+
+    const source = getDocumentSource({
+      filename: previewDoc.name,
+      documentType: previewDoc.type,
+      po,
+      sowNumber: po.sowNumber,
+      quotationNumber: po.quotationNumber,
+      invoiceNumber: previewDoc.invoice?.invoiceNumber,
+      invoice: previewDoc.invoice,
+      file: previewDoc.invoice?.fileData,
+    });
+
+    setDocSource(source);
+  }, [previewDoc, po]);
 
   const daysLeft = getDaysRemaining(po.expiryDate);
+  const counts = getPOCounts(po);
 
   return (
     <div className="space-y-6">
@@ -130,7 +163,7 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
             {formatINR(po.invoicedExclGst)}
           </span>
           <span className="text-[11px] text-slate-500 block mt-1">
-            {po.invoices.filter((i) => i.status !== 'Cancelled').length} Invoices Issued
+            {counts.taxInvoiceCount} Invoices Issued
           </span>
         </Card>
 
@@ -141,7 +174,9 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
           <span className="text-lg font-bold font-mono text-emerald-700 tabular-nums">
             {formatINR(po.creditNotesExclGst)}
           </span>
-          <span className="text-[11px] text-slate-500 block mt-1">Restores PO Balance</span>
+          <span className="text-[11px] text-slate-500 block mt-1">
+            {counts.creditNoteCount} Credit Note(s) (Restores Balance)
+          </span>
         </Card>
 
         <Card className="p-4 bg-indigo-50/50 border-indigo-200">
@@ -317,9 +352,26 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                   size="sm"
                   variant="outline"
                   icon={<Eye className="w-3.5 h-3.5" />}
-                  onClick={() => setPreviewDocName('Statement_of_Work_Document.pdf')}
+                  onClick={() =>
+                    setPreviewDoc({ name: 'Statement_of_Work_Document.pdf', type: 'sow' })
+                  }
                 >
                   View SOW
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Download className="w-3.5 h-3.5" />}
+                  onClick={() =>
+                    downloadDocument({
+                      filename: 'Statement_of_Work_Document.pdf',
+                      documentType: 'sow',
+                      po,
+                      sowNumber: po.sowNumber,
+                    })
+                  }
+                >
+                  Download
                 </Button>
               </div>
             </div>
@@ -342,10 +394,27 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                   variant="primary"
                   icon={<Eye className="w-3.5 h-3.5" />}
                   onClick={() =>
-                    setPreviewDocName(po.poDocumentName || `${po.poNumber.replace(/\//g, '_')}.pdf`)
+                    setPreviewDoc({
+                      name: po.poDocumentName || `${po.poNumber.replace(/\//g, '_')}.pdf`,
+                      type: 'po',
+                    })
                   }
                 >
                   View PO Document
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Download className="w-3.5 h-3.5" />}
+                  onClick={() =>
+                    downloadDocument({
+                      filename: po.poDocumentName || `${po.poNumber.replace(/\//g, '_')}.pdf`,
+                      documentType: 'po',
+                      po,
+                    })
+                  }
+                >
+                  Download
                 </Button>
               </div>
             </div>
@@ -369,9 +438,26 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                   size="sm"
                   variant="outline"
                   icon={<Eye className="w-3.5 h-3.5" />}
-                  onClick={() => setPreviewDocName('Commercial_Quotation_Signed.pdf')}
+                  onClick={() =>
+                    setPreviewDoc({ name: 'Commercial_Quotation_Signed.pdf', type: 'quotation' })
+                  }
                 >
                   View Quotation
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Download className="w-3.5 h-3.5" />}
+                  onClick={() =>
+                    downloadDocument({
+                      filename: 'Commercial_Quotation_Signed.pdf',
+                      documentType: 'quotation',
+                      po,
+                      quotationNumber: po.quotationNumber,
+                    })
+                  }
+                >
+                  Download
                 </Button>
               </div>
             </div>
@@ -381,95 +467,223 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
 
       {/* 3. INVOICES & BALANCE TAB */}
       {activeTab === 'invoices' && (
-        <Card className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Invoices & Credit Notes Log</h3>
-              <p className="text-xs text-slate-500">
-                Remaining Balance = PO Amount Excl. GST − Issued Invoices + Credit Notes. Cancelled
-                invoices do not reduce balance.
-              </p>
-            </div>
-            {permissions.canManageInvoices && (
-              <Button
-                variant="primary"
-                size="sm"
-                icon={<Plus className="w-3.5 h-3.5" />}
-                onClick={() => setInvoiceModalOpen(true)}
-              >
-                Add Invoice
-              </Button>
-            )}
+        <div className="space-y-6">
+          {/* BALANCE BREAKDOWN STRIP */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 border-slate-200">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                Total PO Commitment (Excl. GST)
+              </span>
+              <span className="text-lg font-bold font-mono text-slate-900 tabular-nums">
+                {formatINR(po.amountExclGst)}
+              </span>
+              <span className="text-[11px] text-slate-500 block mt-1">
+                Incl. GST ({po.gstRate}%): {formatINR(po.amountInclGst)}
+              </span>
+            </Card>
+
+            <Card className="p-4 border-slate-200">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                Invoiced (Excl. GST)
+              </span>
+              <span className="text-lg font-bold font-mono text-slate-900 tabular-nums">
+                {formatINR(po.invoicedExclGst)}
+              </span>
+              <span className="text-[11px] text-slate-500 block mt-1">
+                {counts.taxInvoiceCount} Invoices Issued
+              </span>
+            </Card>
+
+            <Card className="p-4 border-slate-200">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                Credit Notes (Excl. GST)
+              </span>
+              <span className="text-lg font-bold font-mono text-emerald-700 tabular-nums">
+                + {formatINR(po.creditNotesExclGst)}
+              </span>
+              <span className="text-[11px] text-slate-500 block mt-1">
+                {counts.creditNoteCount} Credit Notes (Restores Balance)
+              </span>
+            </Card>
+
+            <Card className="p-4 bg-indigo-50/60 border-indigo-200">
+              <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block mb-1">
+                Remaining PO Balance (Excl. GST)
+              </span>
+              <span className="text-xl font-black font-mono text-indigo-900 tabular-nums">
+                {formatINR(po.remainingBalanceExclGst)}
+              </span>
+              <div className="w-full bg-indigo-200/80 rounded-full h-1.5 mt-2 overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-1.5 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(
+                        0,
+                        ((po.amountExclGst - po.remainingBalanceExclGst) / po.amountExclGst) * 100
+                      )
+                    )}%`,
+                  }}
+                ></div>
+              </div>
+              <span className="text-[10px] text-indigo-700 font-semibold block mt-1">
+                {(((po.amountExclGst - po.remainingBalanceExclGst) / po.amountExclGst) * 100).toFixed(1)}% Billed · {((po.remainingBalanceExclGst / po.amountExclGst) * 100).toFixed(1)}% Available
+              </span>
+            </Card>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="p-3">Invoice / Credit Note No.</th>
-                  <th className="p-3">Type</th>
-                  <th className="p-3">Date</th>
-                  <th className="p-3">Billing Period</th>
-                  <th className="p-3 text-right">Excl. GST</th>
-                  <th className="p-3 text-right">Incl. GST</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {po.invoices.length === 0 ? (
+          {/* INVOICES & CREDIT NOTES DATA TABLE */}
+          <Card className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Invoices & Credit Notes Master Ledger</h3>
+                <p className="text-xs text-slate-500">
+                  Calculates remaining balance in real-time. Cancelled invoices do not reduce balance.
+                </p>
+              </div>
+              {permissions.canManageInvoices && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={() => setInvoiceModalOpen(true)}
+                >
+                  Add Invoice
+                </Button>
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                   <tr>
-                    <td colSpan={8} className="p-6 text-center text-slate-400">
-                      No invoices issued yet for this PO.
-                    </td>
+                    <th className="p-3">Invoice / Credit Note No.</th>
+                    <th className="p-3">Type</th>
+                    <th className="p-3">Dates (Issue / Due)</th>
+                    <th className="p-3">Billing Period</th>
+                    <th className="p-3 text-right">Excl. GST</th>
+                    <th className="p-3 text-right font-mono">GST ({po.gstRate}%)</th>
+                    <th className="p-3 text-right font-bold">Total Incl. GST</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-center">Document & Actions</th>
                   </tr>
-                ) : (
-                  po.invoices.map((inv) => (
-                    <tr key={inv.id} className="hover:bg-slate-50">
-                      <td className="p-3 font-mono font-semibold text-slate-900">
-                        {inv.invoiceNumber}
-                      </td>
-                      <td className="p-3">
-                        {inv.isCreditNote ? (
-                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            Credit Note
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
-                            Invoice
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-slate-600">{formatDate(inv.invoiceDate)}</td>
-                      <td className="p-3 text-slate-600">
-                        {formatDate(inv.billingPeriodStart)} – {formatDate(inv.billingPeriodEnd)}
-                      </td>
-                      <td className="p-3 text-right font-mono font-medium text-slate-900 tabular-nums">
-                        {formatINR(inv.amountExclGst)}
-                      </td>
-                      <td className="p-3 text-right font-mono font-medium text-slate-900 tabular-nums">
-                        {formatINR(inv.totalAmountInclGst)}
-                      </td>
-                      <td className="p-3">
-                        <Badge status={inv.status} />
-                      </td>
-                      <td className="p-3 text-right space-x-2">
-                        {inv.status !== 'Cancelled' && permissions.canManageInvoices && (
-                          <button
-                            onClick={() => cancelInvoice(po.id, inv.id)}
-                            className="text-xs text-red-600 hover:text-red-800 font-medium"
-                          >
-                            Cancel
-                          </button>
-                        )}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {po.invoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="p-8 text-center text-slate-400">
+                        No invoices or credit notes issued yet for this PO.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  ) : (
+                    po.invoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3">
+                          <span className="font-mono font-bold text-slate-900 block">{inv.invoiceNumber}</span>
+                          {inv.notes && (
+                            <span className="text-[11px] text-slate-500 block max-w-xs truncate">
+                              {inv.notes}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {inv.isCreditNote ? (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              Credit Note
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              Tax Invoice
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          <span className="block font-medium">{formatDate(inv.invoiceDate)}</span>
+                          {inv.dueDate && (
+                            <span className="text-[10px] text-slate-400 block">Due: {formatDate(inv.dueDate)}</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          {formatDate(inv.billingPeriodStart)} – {formatDate(inv.billingPeriodEnd)}
+                        </td>
+                        <td className="p-3 text-right font-mono font-medium text-slate-900 tabular-nums">
+                          {formatINR(inv.amountExclGst)}
+                        </td>
+                        <td className="p-3 text-right font-mono text-slate-500 tabular-nums">
+                          {formatINR(inv.gstAmount || inv.amountExclGst * (inv.gstRate / 100))}
+                        </td>
+                        <td className="p-3 text-right font-mono font-bold text-indigo-900 tabular-nums">
+                          {formatINR(inv.totalAmountInclGst || inv.amountExclGst * (1 + inv.gstRate / 100))}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-col gap-1">
+                            <Badge status={inv.status} />
+                            {permissions.canManageInvoices && inv.status !== 'Cancelled' && (
+                              <select
+                                value={inv.status}
+                                onChange={(e) => updateInvoiceStatus(po.id, inv.id, e.target.value as any)}
+                                className="text-[10px] bg-white border border-slate-200 rounded px-1 py-0.5 text-slate-700 font-medium cursor-pointer"
+                              >
+                                <option value="Issued">Issued</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Paid">Paid</option>
+                              </select>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              icon={<Eye className="w-3.5 h-3.5" />}
+                              onClick={() =>
+                                setPreviewDoc({
+                                  name: inv.documentName || `${inv.invoiceNumber.replace(/\//g, '_')}.pdf`,
+                                  type: 'invoice',
+                                  invoice: inv,
+                                })
+                              }
+                            >
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              icon={<Download className="w-3.5 h-3.5" />}
+                              onClick={() =>
+                                downloadDocument({
+                                  filename: inv.documentName || `${inv.invoiceNumber.replace(/\//g, '_')}.pdf`,
+                                  documentType: 'invoice',
+                                  po,
+                                  invoice: inv,
+                                  invoiceNumber: inv.invoiceNumber,
+                                  file: inv.fileData,
+                                })
+                              }
+                            >
+                              PDF
+                            </Button>
+                            {inv.status !== 'Cancelled' && permissions.canManageInvoices && (
+                              <button
+                                onClick={() => cancelInvoice(po.id, inv.id)}
+                                className="text-red-600 hover:text-red-800 text-[11px] font-semibold px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                                title="Cancel invoice and restore balance"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* 4. ASSIGNED EMPLOYEES TAB */}
@@ -634,30 +848,56 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
       )}
 
       {/* DOCUMENT PREVIEW MODAL */}
-      {previewDocName && (
+      {previewDoc && (
         <Modal
-          isOpen={!!previewDocName}
-          onClose={() => setPreviewDocName(null)}
-          title={`Document Preview — ${previewDocName}`}
-          maxWidth="2xl"
+          isOpen={!!previewDoc}
+          onClose={() => setPreviewDoc(null)}
+          title={`Document Preview — ${previewDoc.name}`}
+          maxWidth="4xl"
         >
-          <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-            <FileSpreadsheet className="w-12 h-12 text-indigo-600 mx-auto" />
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">{previewDocName}</h4>
-              <p className="text-xs text-slate-500 mt-1">
-                Verified digital document stored in Prime Star Enterprise Document Vault.
-              </p>
-            </div>
-            <div className="flex justify-center gap-3">
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+              <div className="flex items-center gap-2 text-slate-700">
+                <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>
+                  <strong className="text-slate-900">{previewDoc.name}</strong>
+                  {docSource && !docSource.isRealFile && (
+                    <span className="ml-2 px-2 py-0.5 text-[10px] bg-amber-100 text-amber-800 rounded font-medium border border-amber-200">
+                      Generated Vault Statement
+                    </span>
+                  )}
+                </span>
+              </div>
               <Button
                 variant="primary"
                 size="sm"
                 icon={<Download className="w-3.5 h-3.5" />}
-                onClick={() => alert(`Downloading ${previewDocName}...`)}
+                onClick={() =>
+                  downloadDocument({
+                    filename: previewDoc.name,
+                    documentType: previewDoc.type,
+                    po,
+                    sowNumber: po.sowNumber,
+                    quotationNumber: po.quotationNumber,
+                  })
+                }
               >
                 Download Document
               </Button>
+            </div>
+
+            <div className="w-full h-[620px] rounded-xl overflow-hidden shadow-inner">
+              {docSource ? (
+                <PdfViewer
+                  pdfUrl={docSource.url}
+                  fileData={docSource.file}
+                  title={previewDoc.name}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-400">
+                  Loading document viewer...
+                </div>
+              )}
             </div>
           </div>
         </Modal>

@@ -16,6 +16,7 @@ import {
   Clock,
   AlertTriangle,
   Send,
+  ExternalLink,
 } from 'lucide-react';
 import { CandidateInviteModal } from './CandidateInviteModal';
 import { CandidateReviewModal } from './CandidateReviewModal';
@@ -204,6 +205,17 @@ export const OnboardingDashboard: React.FC = () => {
                         onClick={() => handleCopyLink(c.token)}
                       >
                         {copiedToken === c.token ? 'Copied' : 'Copy Link'}
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        icon={<ExternalLink className="w-3.5 h-3.5" />}
+                        onClick={() => {
+                          window.location.search = `?token=${c.token}`;
+                        }}
+                      >
+                        Open Candidate View
                       </Button>
 
                       {permissions.canReviewCandidates && (

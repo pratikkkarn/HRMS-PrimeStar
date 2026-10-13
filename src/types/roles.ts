@@ -24,6 +24,12 @@ export interface RolePermission {
   canApproveTimesheets: boolean;
   canViewReports: boolean;
   isEmployeeOnly: boolean;
+  canDirectlyEditProfiles: boolean;
+  canReviewProfileChangeRequests: boolean;
+  canRequestProfileChanges: boolean;
+  canManageCompanySettings: boolean;
+  canManageUserRoles: boolean;
+  canViewAuditLogs: boolean;
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
@@ -44,6 +50,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
     canApproveTimesheets: true,
     canViewReports: true,
     isEmployeeOnly: false,
+    canDirectlyEditProfiles: true, // CEO has full administrative access to edit employee profiles
+    canReviewProfileChangeRequests: true, // CEO can approve or reject profile change requests
+    canRequestProfileChanges: true,
+    canManageCompanySettings: true,
+    canManageUserRoles: true,
+    canViewAuditLogs: true,
   },
   'HR Head': {
     canViewPODashboard: true,
@@ -62,6 +74,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
     canApproveTimesheets: true,
     canViewReports: true,
     isEmployeeOnly: false,
+    canDirectlyEditProfiles: true, // HR Head can directly edit profiles
+    canReviewProfileChangeRequests: true, // HR Head reviews profile requests
+    canRequestProfileChanges: true,
+    canManageCompanySettings: true,
+    canManageUserRoles: false,
+    canViewAuditLogs: true,
   },
   'HR Executive': {
     canViewPODashboard: true,
@@ -80,6 +98,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
     canApproveTimesheets: false,
     canViewReports: false,
     isEmployeeOnly: false,
+    canDirectlyEditProfiles: true, // HR Executive can edit profiles
+    canReviewProfileChangeRequests: true,
+    canRequestProfileChanges: true,
+    canManageCompanySettings: false,
+    canManageUserRoles: false,
+    canViewAuditLogs: false,
   },
   'Finance Manager': {
     canViewPODashboard: true,
@@ -98,6 +122,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
     canApproveTimesheets: false,
     canViewReports: true,
     isEmployeeOnly: false,
+    canDirectlyEditProfiles: false,
+    canReviewProfileChangeRequests: false,
+    canRequestProfileChanges: true,
+    canManageCompanySettings: false,
+    canManageUserRoles: false,
+    canViewAuditLogs: false,
   },
   'PO Admin': {
     canViewPODashboard: true,
@@ -116,6 +146,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
     canApproveTimesheets: false,
     canViewReports: true,
     isEmployeeOnly: false,
+    canDirectlyEditProfiles: false,
+    canReviewProfileChangeRequests: false,
+    canRequestProfileChanges: true,
+    canManageCompanySettings: false,
+    canManageUserRoles: false,
+    canViewAuditLogs: false,
   },
   'Project Manager': {
     canViewPODashboard: true,
@@ -134,6 +170,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
     canApproveTimesheets: true,
     canViewReports: true,
     isEmployeeOnly: false,
+    canDirectlyEditProfiles: false,
+    canReviewProfileChangeRequests: false,
+    canRequestProfileChanges: true,
+    canManageCompanySettings: false,
+    canManageUserRoles: false,
+    canViewAuditLogs: false,
   },
   Employee: {
     canViewPODashboard: false,
@@ -152,6 +194,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermission> = {
     canApproveTimesheets: false,
     canViewReports: false,
     isEmployeeOnly: true,
+    canDirectlyEditProfiles: false, // Employees cannot directly edit
+    canReviewProfileChangeRequests: false,
+    canRequestProfileChanges: true,
+    canManageCompanySettings: false,
+    canManageUserRoles: false,
+    canViewAuditLogs: false,
   },
 };
 
@@ -231,3 +279,22 @@ export const DEMO_USERS: UserProfile[] = [
     employeeId: 'PS-108',
   },
 ];
+
+export const ROLE_EMPLOYEE_ID_MAP: Record<UserRole, string> = {
+  CEO: 'PS-001',
+  'HR Head': 'PS-012',
+  'HR Executive': 'PS-034',
+  'Finance Manager': 'PS-018',
+  'PO Admin': 'PS-022',
+  'Project Manager': 'PS-015',
+  Employee: 'PS-108',
+};
+
+export function getInitials(name: string): string {
+  if (!name) return 'PS';
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+  return parts[0].slice(0, 2).toUpperCase();
+}

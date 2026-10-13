@@ -8,7 +8,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
   size?: 'sm' | 'md' | 'lg';
   icon?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -65,9 +65,10 @@ export type BadgeVariant =
 interface BadgeProps {
   status: string | BadgeVariant;
   className?: string;
+  children?: React.ReactNode;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ status, className }) => {
+export const Badge: React.FC<BadgeProps> = ({ status, className, children }) => {
   let styles = 'bg-slate-100 text-slate-700 border-slate-200';
   const norm = String(status).toLowerCase();
 
@@ -91,7 +92,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, className }) => {
         className
       )}
     >
-      {status}
+      {children || status}
     </span>
   );
 };

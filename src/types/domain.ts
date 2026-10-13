@@ -72,6 +72,7 @@ export interface Invoice {
   poId: string;
   invoiceNumber: string;
   invoiceDate: string;
+  dueDate?: string;
   billingPeriodStart: string;
   billingPeriodEnd: string;
   amountExclGst: number;
@@ -82,6 +83,8 @@ export interface Invoice {
   isCreditNote?: boolean;
   notes?: string;
   documentName?: string;
+  documentUrl?: string;
+  fileData?: Blob | Uint8Array;
 }
 
 export interface AssignedEmployee {
@@ -280,4 +283,32 @@ export interface SystemNotification {
   timestamp: string;
   isRead: boolean;
   link?: string;
+}
+
+export type ProfileChangeRequestStatus = 'Pending' | 'Approved' | 'Rejected';
+
+export interface ProfileChangeRequest {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  requesterRole: string;
+  employeeId: string;
+  employeeName: string;
+  fieldName: string;
+  fieldKey: keyof EmployeeProfile | string;
+  currentValue: string;
+  proposedValue: string;
+  reason: string;
+  submittedAt: string;
+  status: ProfileChangeRequestStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewerComments?: string;
+}
+
+export interface UserPreferences {
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+  currencyFormat: 'INR (₹)' | 'USD ($)' | 'EUR (€)';
 }
