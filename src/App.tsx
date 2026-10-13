@@ -13,7 +13,10 @@ import { AdminDashboardView } from './components/admin/Dashboard/AdminDashboardV
 import { POTrackerMain } from './components/admin/POTracker/POTrackerMain';
 import { ProjectsView } from './components/admin/Projects/ProjectsView';
 import { InvoicesView } from './components/admin/Invoices/InvoicesView';
+import { DocumentsView } from './components/admin/Documents/DocumentsView';
+import { AssignmentsView } from './components/admin/Assignments/AssignmentsView';
 import { OnboardingDashboard } from './components/admin/Onboarding/OnboardingDashboard';
+import { ProfileRequestsView } from './components/admin/ProfileRequests/ProfileRequestsView';
 import { EmployeesView } from './components/admin/Employees/EmployeesView';
 import { SalaryStructuresView } from './components/admin/Salary/SalaryStructuresView';
 import { TimesheetAdminView } from './components/admin/Timesheets/TimesheetAdminView';
@@ -105,11 +108,11 @@ export function AppContent() {
       {currentTab === 'po-tracker' && <POTrackerMain onNavigate={setCurrentTab} />}
       {currentTab === 'projects' && <ProjectsView />}
       {currentTab === 'invoices' && <InvoicesView />}
-      {currentTab === 'documents' && <POTrackerMain onNavigate={setCurrentTab} />}
-      {currentTab === 'assignments' && <POTrackerMain onNavigate={setCurrentTab} />}
+      {currentTab === 'documents' && <DocumentsView />}
+      {currentTab === 'assignments' && <AssignmentsView />}
       {currentTab === 'onboarding' && <OnboardingDashboard />}
       {currentTab === 'joining-pipeline' && <OnboardingDashboard />}
-      {currentTab === 'profile-requests' && <ProfileAccountView />}
+      {currentTab === 'profile-requests' && <ProfileRequestsView />}
       {currentTab === 'employees' && <EmployeesView />}
       {currentTab === 'salary-structures' && <SalaryStructuresView />}
       {currentTab === 'timesheets' && <TimesheetAdminView />}

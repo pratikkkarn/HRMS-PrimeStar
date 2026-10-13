@@ -87,6 +87,8 @@ export interface Invoice {
   fileData?: Blob | Uint8Array;
 }
 
+export type AssignmentStatus = 'Active' | 'Ending Soon' | 'Completed' | 'On Hold' | 'Unassigned';
+
 export interface AssignedEmployee {
   employeeId: string;
   employeeName: string;
@@ -95,6 +97,26 @@ export interface AssignedEmployee {
   assignedFrom: string;
   assignedTo: string;
   status: 'Active' | 'Unassigned';
+}
+
+export interface EmployeeAssignment {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  designation: string;
+  department?: string;
+  projectId: string;
+  projectName: string;
+  poId?: string;
+  poNumber?: string;
+  assignedFrom: string;
+  assignedTo: string;
+  allocationPercentage: number; // e.g. 100, 50
+  billingRatePerMonth?: number;
+  status: AssignmentStatus;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface POActivityLog {
@@ -217,6 +239,7 @@ export interface CandidateOnboarding {
   submittedAt?: string;
   reviewedAt?: string;
   hrComments?: string;
+  assignedHr?: string;
   isExperienced: boolean;
   educationList: CandidateEducation[];
   employmentList: CandidateEmployment[];
@@ -232,6 +255,7 @@ export interface CandidateOnboarding {
     photoDoc?: string;
   };
   hasAcceptedDeclaration: boolean;
+  checklistState?: Record<string, 'Pending' | 'Verified' | 'Waived'>;
 }
 
 export interface EmployeeProfile {
@@ -259,10 +283,21 @@ export interface DailyTimesheet {
   category: 'Project Delivery' | 'Internal Operations' | 'Client Meeting' | 'Training' | 'Leave';
 }
 
+export interface TimesheetAuditLog {
+  id: string;
+  timestamp: string;
+  action: 'Created' | 'Submitted' | 'Approved' | 'Rejected' | 'Unlock Requested' | 'Unlock Approved' | 'Unlock Rejected';
+  actorName: string;
+  actorRole?: string;
+  comments?: string;
+}
+
 export interface TimesheetEntry {
   id: string;
   employeeId: string;
   employeeName: string;
+  department?: string;
+  designation?: string;
   periodStartDate: string;
   periodEndDate: string;
   projectName: string;
@@ -273,6 +308,7 @@ export interface TimesheetEntry {
   rejectionReason?: string;
   unlockReason?: string;
   dailyLogs: DailyTimesheet[];
+  auditTrail?: TimesheetAuditLog[];
 }
 
 export interface SystemNotification {

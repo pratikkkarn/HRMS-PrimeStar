@@ -229,6 +229,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                     ? 'Dashboard'
                     : currentTab === 'po-tracker'
                     ? 'PO Management / Purchase Orders'
+                    : currentTab === 'documents'
+                    ? 'PO Management / Documents'
+                    : currentTab === 'assignments'
+                    ? 'PO Management / Employee Assignments'
                     : currentTab.replace('-', ' ')}
                 </span>
               </div>

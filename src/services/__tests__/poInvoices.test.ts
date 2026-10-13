@@ -127,7 +127,81 @@ describe('Purchase Order Invoices & Balance Module', () => {
     });
   });
 
-  describe('5. Project Balance Synchronization', () => {
+  describe('5. Infosys INV/PS/25-26/205 Cancellation & Reload Persistence', () => {
+    it('should cancel invoice INV/PS/25-26/205, update balance to 15,00,000, and append audit log', () => {
+      const cancelledInvoicePo = {
+        ...infyPo,
+        invoices: infyPo.invoices.map((inv) =>
+          inv.invoiceNumber === 'INV/PS/25-26/205'
+            ? { ...inv, status: 'Cancelled' as const }
+            : inv
+        ),
+        activityLogs: [
+          ...infyPo.activityLogs,
+          {
+            id: 'act-test-cancel',
+            poId: infyPo.id,
+            timestamp: '2025-10-13 12:00 PM',
+            userName: 'Kavita Nair',
+            userRole: 'Billing Lead',
+            action: 'Invoice Cancelled',
+            details: 'Invoice INV/PS/25-26/205 was cancelled. Balance restored.',
+          },
+        ],
+      };
+
+      const recalculated = recalculatePOBalances(cancelledInvoicePo);
+
+      // Total PO: 25,00,000. Active invoice (INV/PS/25-26/102): 10,00,000.
+      // Cancelled invoice (INV/PS/25-26/205): 6,50,000 -> does NOT reduce balance.
+      // Remaining PO Balance = 25,00,000 - 10,00,000 = 15,00,000.
+      expect(recalculated.invoicedExclGst).toBe(1000000);
+      expect(recalculated.remainingBalanceExclGst).toBe(1500000);
+
+      // Audit log check
+      const cancelLog = recalculated.activityLogs.find((a) => a.action === 'Invoice Cancelled');
+      expect(cancelLog).toBeDefined();
+      expect(cancelLog?.details).toContain('INV/PS/25-26/205');
+    });
+
+    it('should preserve cancelled status, balance of 15,00,000, and audit log on page reload simulation', () => {
+      const cancelledInvoicePo = {
+        ...infyPo,
+        invoices: infyPo.invoices.map((inv) =>
+          inv.invoiceNumber === 'INV/PS/25-26/205'
+            ? { ...inv, status: 'Cancelled' as const }
+            : inv
+        ),
+        activityLogs: [
+          ...infyPo.activityLogs,
+          {
+            id: 'act-test-cancel',
+            poId: infyPo.id,
+            timestamp: '2025-10-13 12:00 PM',
+            userName: 'Kavita Nair',
+            userRole: 'Billing Lead',
+            action: 'Invoice Cancelled',
+            details: 'Invoice INV/PS/25-26/205 was cancelled. Balance restored.',
+          },
+        ],
+      };
+
+      const recalculated = recalculatePOBalances(cancelledInvoicePo);
+
+      // Simulate localStorage save & reload (Serialization + Deserialization)
+      const serialized = JSON.stringify([recalculated]);
+      const deserialized: typeof INITIAL_POS = JSON.parse(serialized);
+
+      const reloadedPo = recalculatePOBalances(deserialized[0]);
+
+      expect(reloadedPo.invoices.find((i) => i.invoiceNumber === 'INV/PS/25-26/205')?.status).toBe('Cancelled');
+      expect(reloadedPo.invoicedExclGst).toBe(1000000);
+      expect(reloadedPo.remainingBalanceExclGst).toBe(1500000);
+      expect(reloadedPo.activityLogs.some((a) => a.action === 'Invoice Cancelled')).toBe(true);
+    });
+  });
+
+  describe('6. Project Balance Synchronization', () => {
     it('should synchronize project totals with active PO balances', () => {
       const updatedProjects = recalculateProjectBalances(INITIAL_PROJECTS, [hdfcPo, infyPo]);
 
