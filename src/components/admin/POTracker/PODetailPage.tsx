@@ -26,6 +26,8 @@ import {
 import { POInvoiceModal } from './POInvoiceModal';
 import { PORenewalModal } from './PORenewalModal';
 import { POEmployeeAssignModal } from './POEmployeeAssignModal';
+import { POAmendModal } from './POAmendModal';
+import { TerminateAssignmentModal } from '../Assignments/TerminateAssignmentModal';
 
 interface PODetailPageProps {
   po: PurchaseOrder;
@@ -43,6 +45,8 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [renewalModalOpen, setRenewalModalOpen] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [amendModalOpen, setAmendModalOpen] = useState(false);
+  const [selectedTerminateAssignment, setSelectedTerminateAssignment] = useState<any | null>(null);
   const [previewDoc, setPreviewDoc] = useState<{
     name: string;
     type: 'sow' | 'po' | 'quotation' | 'invoice' | 'generic';
@@ -141,6 +145,17 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
               onClick={() => setAssignModalOpen(true)}
             >
               Tag Employee
+            </Button>
+          )}
+
+          {permissions.canManagePOs && (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<DollarSign className="w-3.5 h-3.5" />}
+              onClick={() => setAmendModalOpen(true)}
+            >
+              Amend PO Value
             </Button>
           )}
 
@@ -892,6 +907,22 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
           po={po}
           isOpen={assignModalOpen}
           onClose={() => setAssignModalOpen(false)}
+        />
+      )}
+
+      {amendModalOpen && (
+        <POAmendModal
+          po={po}
+          isOpen={amendModalOpen}
+          onClose={() => setAmendModalOpen(false)}
+        />
+      )}
+
+      {selectedTerminateAssignment && (
+        <TerminateAssignmentModal
+          assignment={selectedTerminateAssignment}
+          isOpen={!!selectedTerminateAssignment}
+          onClose={() => setSelectedTerminateAssignment(null)}
         />
       )}
 

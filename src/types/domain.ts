@@ -96,7 +96,7 @@ export interface Invoice {
   employeeName?: string;
 }
 
-export type AssignmentStatus = 'Active' | 'Ending Soon' | 'Completed' | 'On Hold' | 'Unassigned';
+export type AssignmentStatus = 'Active' | 'Ending Soon' | 'Completed' | 'On Hold' | 'Terminated' | 'Unassigned';
 
 export interface AssignedEmployee {
   employeeId: string;
@@ -125,6 +125,8 @@ export interface EmployeeAssignment {
   allocatedHoursPerMonth?: number; // Calculated hours e.g. 160 * (alloc / 100)
   billingRatePerMonth?: number;
   status: AssignmentStatus;
+  effectiveTerminationDate?: string;
+  terminationReason?: string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -136,8 +138,27 @@ export interface POActivityLog {
   timestamp: string;
   userName: string;
   userRole: string;
-  action: string; // e.g. "Invoice Issued", "PO Created", "Renewed"
+  action: string; // e.g. "Invoice Issued", "PO Created", "Renewed", "PO Value Amended"
   details: string;
+}
+
+export interface POAmendment {
+  id: string;
+  poId: string;
+  originalValueExclGst: number;
+  revisedValueExclGst: number;
+  changeType: 'REDUCTION' | 'INCREASE';
+  changeAmountExclGst: number;
+  effectiveDate: string;
+  reason: string;
+  documentRef?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requestedBy: string;
+  approvedBy?: string;
+  createdAt: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
 }
 
 export interface PurchaseOrder {
@@ -152,7 +173,9 @@ export interface PurchaseOrder {
   poRequester: string;
   startDate: string;
   expiryDate: string;
-  amountExclGst: number;
+  amountExclGst: number; // Current approved PO contractual value
+  originalAmountExclGst?: number; // Original PO contractual value
+  amendments?: POAmendment[]; // Contractual value revision history
   gstRate: number; // e.g. 18%
   amountInclGst: number;
   invoicedExclGst: number;

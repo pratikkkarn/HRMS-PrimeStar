@@ -212,3 +212,194 @@ export function getValidPoForProject(
   );
   return isValid ? selectedPoId : '';
 }
+
+const MONTH_NAMES = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+];
+
+export interface ProrationResult {
+  eligibleDays: number;
+  totalDaysInMonth: number;
+  eligibleAmount: number;
+  isFullMonth: boolean;
+  prorationApplied: boolean;
+  effectiveStartDateStr: string;
+  effectiveEndDateStr: string;
+}
+
+/**
+ * Calculates calendar-day prorated billing amount for an employee assignment in a specific billing month.
+ * Formula: Eligible amount = Monthly employee billing amount * Eligible calendar days / Total calendar days in billing month.
+ * Departure date treatment: Employee is billable ON and up to the effective termination date (inclusive).
+ */
+export function calculateProratedBillingAmount(params: {
+  monthlyBillingRate: number;
+  assignedFrom: string; // YYYY-MM-DD
+  assignedTo: string; // YYYY-MM-DD
+  effectiveTerminationDate?: string; // YYYY-MM-DD
+  billingYear: number;
+  billingMonth: number | string; // 1..12 or "October" or "October 2026"
+}): ProrationResult {
+  const {
+    monthlyBillingRate,
+    assignedFrom,
+    assignedTo,
+    effectiveTerminationDate,
+    billingYear,
+    billingMonth,
+  } = params;
+
+  if (isNaN(monthlyBillingRate) || monthlyBillingRate <= 0) {
+    return {
+      eligibleDays: 0,
+      totalDaysInMonth: 30,
+      eligibleAmount: 0,
+      isFullMonth: false,
+      prorationApplied: false,
+      effectiveStartDateStr: '',
+      effectiveEndDateStr: '',
+    };
+  }
+
+  // Parse Month Index (0..11)
+  let monthIndex = 0;
+  if (typeof billingMonth === 'number') {
+    monthIndex = Math.max(0, Math.min(11, billingMonth - 1));
+  } else {
+    const cleanMonthStr = String(billingMonth).toLowerCase().trim().split(' ')[0];
+    const foundIdx = MONTH_NAMES.findIndex((m) => m.startsWith(cleanMonthStr));
+    if (foundIdx !== -1) {
+      monthIndex = foundIdx;
+    }
+  }
+
+  // Calculate Total Days in Month (e.g. 28, 29, 30, 31)
+  const year = billingYear || new Date().getFullYear();
+  const totalDaysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+  const monthStartStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const monthEndStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(
+    totalDaysInMonth
+  ).padStart(2, '0')}`;
+
+  const effectiveEnd = effectiveTerminationDate || assignedTo;
+
+  // Determine effective range for this month
+  const effectiveStartForMonth = assignedFrom > monthStartStr ? assignedFrom : monthStartStr;
+  const effectiveEndForMonth = effectiveEnd < monthEndStr ? effectiveEnd : monthEndStr;
+
+  if (
+    effectiveStartForMonth > effectiveEndForMonth ||
+    assignedFrom > monthEndStr ||
+    effectiveEnd < monthStartStr
+  ) {
+    return {
+      eligibleDays: 0,
+      totalDaysInMonth,
+      eligibleAmount: 0,
+      isFullMonth: false,
+      prorationApplied: true,
+      effectiveStartDateStr: effectiveStartForMonth,
+      effectiveEndDateStr: effectiveEndForMonth,
+    };
+  }
+
+  // Calculate inclusive calendar days
+  const startDate = new Date(effectiveStartForMonth);
+  const endDate = new Date(effectiveEndForMonth);
+  const diffTime = endDate.getTime() - startDate.getTime();
+  const eligibleDays = Math.max(0, Math.round(diffTime / (1000 * 3600 * 24)) + 1);
+
+  if (eligibleDays >= totalDaysInMonth) {
+    return {
+      eligibleDays: totalDaysInMonth,
+      totalDaysInMonth,
+      eligibleAmount: monthlyBillingRate,
+      isFullMonth: true,
+      prorationApplied: false,
+      effectiveStartDateStr: monthStartStr,
+      effectiveEndDateStr: monthEndStr,
+    };
+  }
+
+  const eligibleAmount = Math.round((monthlyBillingRate * eligibleDays) / totalDaysInMonth);
+
+  return {
+    eligibleDays,
+    totalDaysInMonth,
+    eligibleAmount,
+    isFullMonth: false,
+    prorationApplied: true,
+    effectiveStartDateStr: effectiveStartForMonth,
+    effectiveEndDateStr: effectiveEndForMonth,
+  };
+}
+
+export interface EmployeeEligibleBillingItem {
+  assignmentId: string;
+  employeeId: string;
+  employeeName: string;
+  designation: string;
+  monthlyBillingRate: number;
+  eligibleDays: number;
+  totalDaysInMonth: number;
+  eligibleAmount: number;
+  isFullMonth: boolean;
+  prorationApplied: boolean;
+  status: string;
+  effectiveTerminationDate?: string;
+  terminationReason?: string;
+}
+
+/**
+ * Computes eligible billing amounts for all employees assigned to a Purchase Order for a given month and year.
+ */
+export function getPOEmployeeEligibleBillingForMonth(params: {
+  poId: string;
+  assignments: EmployeeAssignment[];
+  billingYear: number;
+  billingMonth: number | string;
+}): EmployeeEligibleBillingItem[] {
+  const { poId, assignments, billingYear, billingMonth } = params;
+
+  const poAssignments = assignments.filter((a) => a.poId === poId);
+
+  return poAssignments.map((asgn) => {
+    const rate = asgn.billingRatePerMonth || 0;
+    const proration = calculateProratedBillingAmount({
+      monthlyBillingRate: rate,
+      assignedFrom: asgn.assignedFrom,
+      assignedTo: asgn.assignedTo,
+      effectiveTerminationDate: asgn.effectiveTerminationDate,
+      billingYear,
+      billingMonth,
+    });
+
+    return {
+      assignmentId: asgn.id,
+      employeeId: asgn.employeeId,
+      employeeName: asgn.employeeName,
+      designation: asgn.designation,
+      monthlyBillingRate: rate,
+      eligibleDays: proration.eligibleDays,
+      totalDaysInMonth: proration.totalDaysInMonth,
+      eligibleAmount: proration.eligibleAmount,
+      isFullMonth: proration.isFullMonth,
+      prorationApplied: proration.prorationApplied,
+      status: asgn.status,
+      effectiveTerminationDate: asgn.effectiveTerminationDate,
+      terminationReason: asgn.terminationReason,
+    };
+  });
+}

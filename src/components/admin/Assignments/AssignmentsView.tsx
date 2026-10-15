@@ -22,7 +22,9 @@ import {
   UserPlus,
   ShieldAlert,
   ArrowRight,
+  UserX,
 } from 'lucide-react';
+import { TerminateAssignmentModal } from './TerminateAssignmentModal';
 
 const STORAGE_KEYS_ASSIGNMENTS = 'primestar_employee_assignments';
 
@@ -163,6 +165,7 @@ export const AssignmentsView: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<EmployeeAssignment | null>(null);
   const [deleteConfirmAssignment, setDeleteConfirmAssignment] = useState<EmployeeAssignment | null>(null);
+  const [terminateTargetAssignment, setTerminateTargetAssignment] = useState<EmployeeAssignment | null>(null);
 
   // Form Fields State
   const [formEmployeeId, setFormEmployeeId] = useState('');
@@ -949,6 +952,17 @@ export const AssignmentsView: React.FC = () => {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* End Allocation / Terminate Action */}
+                          {asgn.status !== 'Terminated' && (
+                            <button
+                              onClick={() => setTerminateTargetAssignment(asgn)}
+                              className="p-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 font-medium transition-colors cursor-pointer"
+                              title="End Allocation (Prorated Departure)"
+                            >
+                              <UserX className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           {/* Unassign / Remove Action */}
                           <button
                             onClick={() => setDeleteConfirmAssignment(asgn)}
@@ -1273,6 +1287,15 @@ export const AssignmentsView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* TERMINATE ASSIGNMENT MODAL */}
+      {terminateTargetAssignment && (
+        <TerminateAssignmentModal
+          assignment={terminateTargetAssignment}
+          isOpen={!!terminateTargetAssignment}
+          onClose={() => setTerminateTargetAssignment(null)}
+        />
       )}
     </div>
   );

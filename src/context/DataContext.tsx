@@ -18,6 +18,8 @@ import {
   TimesheetStatus,
   ProfileChangeRequest,
   UserPreferences,
+  POAmendment,
+  EmployeeAssignment,
 } from '../types/domain';
 import {
   INITIAL_PROJECTS,
@@ -29,8 +31,9 @@ import {
   INITIAL_TIMESHEETS,
   INITIAL_NOTIFICATIONS,
   INITIAL_PROFILE_REQUESTS,
+  INITIAL_ASSIGNMENTS,
 } from '../services/mockData';
-import { recalculatePOBalances, recalculateProjectBalances } from '../lib/poUtils';
+import { recalculatePOBalances, recalculateProjectBalances, applyPOAmendment, validatePOAmendment } from '../lib/poUtils';
 import { useNotification } from './NotificationContext';
 import { useRole } from './RoleContext';
 
@@ -189,6 +192,7 @@ interface DataContextType {
   employees: EmployeeProfile[];
   timesheets: TimesheetEntry[];
   notifications: SystemNotification[];
+  assignments: EmployeeAssignment[];
 
   // PO Actions
   addProject: (project: Omit<Project, 'id' | 'totalPoValue' | 'remainingBalance' | 'assignedHeadcount'>) => Project;
@@ -211,6 +215,11 @@ interface DataContextType {
   updatePO: (poId: string, data: Partial<PurchaseOrder>) => void;
   deletePO: (poId: string) => void;
   renewPO: (oldPoId: string, newPoNumber: string, newAmountExclGst: number, newStartDate: string, newExpiryDate: string) => PurchaseOrder;
+  submitPOAmendment: (
+    poId: string,
+    amendmentData: Omit<POAmendment, 'id' | 'poId' | 'createdAt' | 'status'> & { status?: 'PENDING' | 'APPROVED' | 'REJECTED' }
+  ) => void;
+  approvePOAmendment: (poId: string, amendmentId: string) => void;
   addInvoice: (poId: string, invoice: Omit<Invoice, 'id' | 'poId' | 'gstAmount' | 'totalAmountInclGst'>) => void;
   updateInvoiceStatus: (poId: string, invoiceId: string, status: InvoiceStatus) => void;
   cancelInvoice: (poId: string, invoiceId: string) => void;
@@ -218,6 +227,11 @@ interface DataContextType {
   unassignEmployeeFromPO: (poId: string, employeeId: string) => void;
   addSOW: (sow: Omit<StatementOfWork, 'id'>) => StatementOfWork;
   addQuotation: (quot: Omit<Quotation, 'id'>) => Quotation;
+
+  // Employee Assignment Actions
+  addAssignment: (assignment: Omit<EmployeeAssignment, 'id'>) => EmployeeAssignment;
+  updateAssignment: (id: string, updatedFields: Partial<EmployeeAssignment>) => void;
+  terminateAssignment: (id: string, effectiveTerminationDate: string, reason: string) => void;
 
   // Candidate / Onboarding Actions
   inviteCandidate: (candidateData: {
@@ -322,8 +336,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     })
   );
 
+  const [assignments, setAssignments] = useState<EmployeeAssignment[]>(() =>
+    loadStoredData<EmployeeAssignment[]>(STORAGE_KEYS.ASSIGNMENTS, INITIAL_ASSIGNMENTS)
+  );
+
   const { showToast } = useNotification();
   const { currentUser, updateProfileOverride } = useRole();
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
+    } catch (e) {
+      console.error('Error saving assignments to localStorage:', e);
+    }
+  }, [assignments]);
 
   useEffect(() => {
     try {
@@ -624,6 +650,150 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setPurchaseOrders((prev) => [finalSuccessor, ...prev]);
     showToast('PO Renewed', `New PO ${newPoNumber} created as renewal for ${oldPo.poNumber}`);
     return finalSuccessor;
+  };
+
+  const submitPOAmendment = (
+    poId: string,
+    amendmentData: Omit<POAmendment, 'id' | 'poId' | 'createdAt' | 'status'> & { status?: 'PENDING' | 'APPROVED' | 'REJECTED' }
+  ) => {
+    const po = purchaseOrders.find((p) => p.id === poId);
+    if (!po) return;
+
+    // Validate if status is APPROVED
+    if (amendmentData.status === 'APPROVED' || !amendmentData.status) {
+      const validation = validatePOAmendment(po, amendmentData.revisedValueExclGst);
+      if (!validation.valid) {
+        showToast('Amendment Validation Failed', validation.error || 'Invalid amendment value', 'error');
+        throw new Error(validation.error);
+      }
+    }
+
+    const updatedPo = applyPOAmendment(
+      po,
+      { ...amendmentData, status: amendmentData.status || 'APPROVED' },
+      { name: currentUser.name, role: currentUser.role }
+    );
+
+    updatePOsState((prev) => prev.map((p) => (p.id === poId ? updatedPo : p)));
+    showToast('PO Value Amended', `PO ${po.poNumber} contractual value revised to ₹${amendmentData.revisedValueExclGst.toLocaleString('en-IN')}`);
+  };
+
+  const approvePOAmendment = (poId: string, amendmentId: string) => {
+    const po = purchaseOrders.find((p) => p.id === poId);
+    if (!po || !po.amendments) return;
+
+    const targetAmend = po.amendments.find((a) => a.id === amendmentId);
+    if (!targetAmend) return;
+
+    const validation = validatePOAmendment(po, targetAmend.revisedValueExclGst);
+    if (!validation.valid) {
+      showToast('Cannot Approve Amendment', validation.error || 'Validation failed', 'error');
+      return;
+    }
+
+    const updatedAmendments = po.amendments.map((a) =>
+      a.id === amendmentId
+        ? {
+            ...a,
+            status: 'APPROVED' as const,
+            approvedBy: currentUser.name,
+            approvedAt: new Date().toLocaleString('en-IN'),
+          }
+        : a
+    );
+
+    const revisedAmountExclGst = targetAmend.revisedValueExclGst;
+    const revisedAmountInclGst = revisedAmountExclGst * (1 + po.gstRate / 100);
+
+    const updatedPoRaw: PurchaseOrder = {
+      ...po,
+      amountExclGst: revisedAmountExclGst,
+      amountInclGst: revisedAmountInclGst,
+      amendments: updatedAmendments,
+      activityLogs: [
+        {
+          id: `act-${Date.now()}`,
+          poId: po.id,
+          timestamp: new Date().toLocaleString('en-IN'),
+          userName: currentUser.name,
+          userRole: currentUser.role,
+          action: 'PO Value Amended',
+          details: `Approved PO contractual value revision from ₹${targetAmend.originalValueExclGst.toLocaleString('en-IN')} to ₹${revisedAmountExclGst.toLocaleString('en-IN')}`,
+        },
+        ...(po.activityLogs || []),
+      ],
+    };
+
+    const finalPo = recalculatePOBalances(updatedPoRaw);
+    updatePOsState((prev) => prev.map((p) => (p.id === poId ? finalPo : p)));
+    showToast('Amendment Approved', `Revised PO contractual value applied to ${po.poNumber}`);
+  };
+
+  const addAssignment = (assignmentData: Omit<EmployeeAssignment, 'id'>): EmployeeAssignment => {
+    const newAsgn: EmployeeAssignment = {
+      ...assignmentData,
+      id: `asgn-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setAssignments((prev) => [newAsgn, ...prev]);
+    showToast('Assignment Created', `Assigned ${assignmentData.employeeName} to ${assignmentData.projectName}`);
+    return newAsgn;
+  };
+
+  const updateAssignment = (id: string, updatedFields: Partial<EmployeeAssignment>) => {
+    setAssignments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, ...updatedFields, updatedAt: new Date().toISOString() } : a))
+    );
+    showToast('Assignment Updated', 'Employee assignment updated successfully.');
+  };
+
+  const terminateAssignment = (id: string, effectiveTerminationDate: string, reason: string) => {
+    const target = assignments.find((a) => a.id === id);
+    if (!target) return;
+
+    const updatedRecord: EmployeeAssignment = {
+      ...target,
+      status: 'Terminated',
+      assignedTo: effectiveTerminationDate,
+      effectiveTerminationDate,
+      terminationReason: reason,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setAssignments((prev) => prev.map((a) => (a.id === id ? updatedRecord : a)));
+
+    // Also update PO's assignedEmployees status if linked
+    if (target.poId) {
+      updatePOsState((prev) =>
+        prev.map((p) => {
+          if (p.id === target.poId) {
+            const updatedEmployees = p.assignedEmployees.map((e) =>
+              e.employeeId === target.employeeId ? { ...e, status: 'Unassigned' as const, assignedTo: effectiveTerminationDate } : e
+            );
+            return {
+              ...p,
+              assignedEmployees: updatedEmployees,
+              activityLogs: [
+                {
+                  id: `act-${Date.now()}`,
+                  poId: p.id,
+                  timestamp: new Date().toLocaleString('en-IN'),
+                  userName: currentUser.name,
+                  userRole: currentUser.role,
+                  action: 'Employee Allocation Terminated',
+                  details: `Terminated allocation for ${target.employeeName} effective ${effectiveTerminationDate}. Reason: ${reason}`,
+                },
+                ...(p.activityLogs || []),
+              ],
+            };
+          }
+          return p;
+        })
+      );
+    }
+
+    showToast('Allocation Terminated', `Ended ${target.employeeName}'s allocation effective ${effectiveTerminationDate}`);
   };
 
   const addInvoice = (
@@ -1479,11 +1649,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         notifications,
         profileRequests,
         userPreferences,
+        assignments,
         addProject,
         createPO,
         updatePO,
         deletePO,
         renewPO,
+        submitPOAmendment,
+        approvePOAmendment,
         addInvoice,
         updateInvoiceStatus,
         cancelInvoice,
@@ -1491,6 +1664,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         unassignEmployeeFromPO,
         addSOW,
         addQuotation,
+        addAssignment,
+        updateAssignment,
+        terminateAssignment,
         inviteCandidate,
         updateCandidateOnboarding,
         editCandidateDetails,
