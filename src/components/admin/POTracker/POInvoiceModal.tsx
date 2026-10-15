@@ -3,6 +3,7 @@ import { useData } from '../../../context/DataContext';
 import { Modal, Input, Button } from '../../common/UIComponents';
 import { PurchaseOrder } from '../../../types/domain';
 import { formatINR } from '../../../lib/utils';
+import { validateNewCreditNoteAmount } from '../../../lib/poUtils';
 import { FileText, AlertCircle, Upload, CheckCircle2 } from 'lucide-react';
 
 interface POInvoiceModalProps {
@@ -29,6 +30,15 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
   );
   const [invoiceDate, setInvoiceDate] = useState(todayStr);
   const [dueDate, setDueDate] = useState(defaultDueDateStr);
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const currentMonthName = monthNames[new Date().getMonth()] || 'October';
+
+  const [billingMonth, setBillingMonth] = useState(currentMonthName);
+  const [billingYear, setBillingYear] = useState(currentYear);
   const [billingPeriodStart, setBillingPeriodStart] = useState(
     `${todayStr.slice(0, 7)}-01`
   );
@@ -101,8 +111,14 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
       return;
     }
 
-    // Available PO Balance Check
-    if (!isCreditNote && safeAmountExclGst > po.remainingBalanceExclGst) {
+    // Validation for Credit Note vs Tax Invoice
+    if (isCreditNote) {
+      const creditValidation = validateNewCreditNoteAmount(po, safeAmountExclGst);
+      if (!creditValidation.valid) {
+        setError(creditValidation.error || 'Invalid credit note amount.');
+        return;
+      }
+    } else if (safeAmountExclGst > po.remainingBalanceExclGst) {
       setError(
         `Invoice amount (${formatINR(safeAmountExclGst)}) exceeds available PO balance (${formatINR(po.remainingBalanceExclGst)}). Reduce invoice amount or add a Credit Note.`
       );
@@ -117,6 +133,9 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
       invoiceNumber: invoiceNumber.trim(),
       invoiceDate,
       dueDate,
+      billingMonth,
+      billingYear,
+      billingPeriod: `${billingMonth} ${billingYear}`,
       billingPeriodStart,
       billingPeriodEnd,
       amountExclGst: safeAmountExclGst,
@@ -204,7 +223,40 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
           />
         </div>
 
-        {/* BILLING PERIOD */}
+        {/* BILLING MONTH & YEAR SELECTORS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Billing Month *</label>
+            <select
+              value={billingMonth}
+              onChange={(e) => setBillingMonth(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
+            >
+              {monthNames.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">Billing Year *</label>
+            <select
+              value={billingYear}
+              onChange={(e) => setBillingYear(Number(e.target.value))}
+              className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
+            >
+              {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* BILLING PERIOD DATES */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Billing Period Start *"

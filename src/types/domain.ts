@@ -32,13 +32,15 @@ export interface Project {
   name: string;
   clientName: string;
   code: string;
-  projectManager: string;
+  projectManager: string; // Primary PM (backward compatible)
+  projectManagers?: string[]; // Multi-manager array
   startDate: string;
   endDate: string;
   status: 'Active' | 'Completed' | 'On Hold';
   assignedHeadcount: number;
   totalPoValue: number;
   remainingBalance: number;
+  _migrated_v2?: boolean;
 }
 
 export interface StatementOfWork {
@@ -75,6 +77,9 @@ export interface Invoice {
   dueDate?: string;
   billingPeriodStart: string;
   billingPeriodEnd: string;
+  billingMonth?: string; // E.g. "October"
+  billingYear?: number; // E.g. 2026
+  billingPeriod?: string; // E.g. "October 2026"
   amountExclGst: number;
   gstRate: number;
   gstAmount: number;
@@ -109,9 +114,11 @@ export interface EmployeeAssignment {
   projectName: string;
   poId?: string;
   poNumber?: string;
+  projectManager?: string; // Assigned manager for grouping
   assignedFrom: string;
   assignedTo: string;
   allocationPercentage: number; // e.g. 100, 50
+  allocatedHoursPerMonth?: number; // Calculated hours e.g. 160 * (alloc / 100)
   billingRatePerMonth?: number;
   status: AssignmentStatus;
   notes?: string;
@@ -157,6 +164,7 @@ export interface PurchaseOrder {
   invoices: Invoice[];
   assignedEmployees: AssignedEmployee[];
   activityLogs: POActivityLog[];
+  _migrated_v2?: boolean;
 }
 
 export interface SalaryComponent {

@@ -992,10 +992,10 @@ export const INITIAL_TIMESHEETS: TimesheetEntry[] = [
   },
   {
     id: 'ts-2026-10-w4',
-    employeeId: 'PS-104',
+    employeeId: 'PS-001',
     employeeName: 'Rajesh Sharma',
-    department: 'Full Stack Engineering',
-    designation: 'Senior Full Stack Developer',
+    department: 'Executive Office',
+    designation: 'Chief Executive Officer',
     periodStartDate: '2026-09-29',
     periodEndDate: '2026-10-05',
     projectName: 'TATA Capital Customer Portal',

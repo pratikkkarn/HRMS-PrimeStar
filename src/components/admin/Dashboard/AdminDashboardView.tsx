@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { Card, StatCard, Badge, Button } from '../../common/UIComponents';
 import { formatINR, formatINRCompact, formatDate } from '../../../lib/utils';
 import { useRole } from '../../../context/RoleContext';
+import { useData } from '../../../context/DataContext';
 import {
-  DASHBOARD_SUMMARY_DATA,
   PROJECT_CHART_DATA,
   STATUS_DISTRIBUTION_DATA,
   RECENT_PO_RECORDS,
-  RecentPORecord,
 } from '../../../services/dashboardData';
 import {
   FileText,
@@ -43,16 +42,88 @@ interface AdminDashboardViewProps {
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNavigate }) => {
   const { currentUser } = useRole();
+  const { purchaseOrders, projects } = useData();
   const [dateRange, setDateRange] = useState('This Quarter (Q3 2026)');
   const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
 
-  const summary = DASHBOARD_SUMMARY_DATA;
-  const recentPOs = RECENT_PO_RECORDS;
+  // Compute live summary from purchaseOrders
+  const totalPOsCount = purchaseOrders.length;
+  const activePOsCount = purchaseOrders.filter((p) => p.status === 'Active').length;
+  const expiringSoonPOsCount = purchaseOrders.filter((p) => p.status === 'Expiring Soon').length;
+  const lowBalancePOsCount = purchaseOrders.filter((p) => p.status === 'Low Balance').length;
+
+  const totalPOValueNum = purchaseOrders.reduce((sum, p) => sum + (p.amountExclGst || 0), 0);
+  const activePOValueNum = purchaseOrders
+    .filter((p) => p.status === 'Active')
+    .reduce((sum, p) => sum + (p.amountExclGst || 0), 0);
+  const expiringValueNum = purchaseOrders
+    .filter((p) => p.status === 'Expiring Soon')
+    .reduce((sum, p) => sum + (p.amountExclGst || 0), 0);
+  const lowBalanceValueNum = purchaseOrders
+    .filter((p) => p.status === 'Low Balance')
+    .reduce((sum, p) => sum + (p.amountExclGst || 0), 0);
+  const remainingBalanceNum = purchaseOrders.reduce((sum, p) => sum + (p.remainingBalanceExclGst || 0), 0);
+
+  const summary = {
+    totalPOs: totalPOsCount,
+    totalPOValueStr: formatINRCompact(totalPOValueNum),
+    activePOs: activePOsCount,
+    activePOValueStr: formatINRCompact(activePOValueNum),
+    expiringSoonPOs: expiringSoonPOsCount,
+    expiringValueStr: formatINRCompact(expiringValueNum),
+    lowBalancePOs: lowBalancePOsCount,
+    lowBalanceValueStr: formatINRCompact(lowBalanceValueNum),
+    totalPOValueDisplay: formatINR(totalPOValueNum),
+    remainingBalanceDisplay: formatINR(remainingBalanceNum),
+  };
+
+  // Dynamic Chart Data
+  const dynamicProjectChartData = projects.map((p) => ({
+    projectName: p.name,
+    totalValue: p.totalPoValue || 0,
+    remainingBalance: p.remainingBalance || 0,
+  }));
+
+  const statusCounts = {
+    Active: purchaseOrders.filter((p) => p.status === 'Active').length,
+    'Expiring Soon': purchaseOrders.filter((p) => p.status === 'Expiring Soon').length,
+    'Low Balance': purchaseOrders.filter((p) => p.status === 'Low Balance').length,
+    Expired: purchaseOrders.filter((p) => p.status === 'Expired').length,
+    'Fully Utilized': purchaseOrders.filter((p) => p.status === 'Fully Utilized').length,
+    Renewed: purchaseOrders.filter((p) => p.status === 'Renewed').length,
+  };
+
+  const dynamicStatusDistributionData = [
+    { name: 'Active', value: statusCounts.Active, color: '#10B981' },
+    { name: 'Expiring Soon', value: statusCounts['Expiring Soon'], color: '#F59E0B' },
+    { name: 'Low Balance', value: statusCounts['Low Balance'], color: '#EF4444' },
+    { name: 'Expired', value: statusCounts.Expired, color: '#6B7280' },
+    { name: 'Fully Utilized', value: statusCounts['Fully Utilized'], color: '#8B5CF6' },
+    { name: 'Renewed', value: statusCounts.Renewed, color: '#3B82F6' },
+  ];
+
+  // Dynamic Recent POs
+  const recentPOs = purchaseOrders.slice(0, 5).map((po) => ({
+    id: po.id,
+    poNumber: po.poNumber,
+    projectName: po.projectName,
+    requester: po.poRequester,
+    startDate: po.startDate,
+    endDate: po.expiryDate,
+    poValue: po.amountExclGst,
+    remainingBalance: po.remainingBalanceExclGst,
+    status: po.status,
+  }));
 
   const userFirstName = currentUser.name ? currentUser.name.split(' ')[0] : 'Vijay';
 
-  const hasChartData = PROJECT_CHART_DATA.some((p) => p.totalValue > 0 || p.remainingBalance > 0);
-  const hasStatusData = STATUS_DISTRIBUTION_DATA.some((s) => s.value > 0);
+  const chartDataToUse = dynamicProjectChartData.length > 0 ? dynamicProjectChartData : PROJECT_CHART_DATA;
+  const statusDataToUse = dynamicStatusDistributionData.some((s) => s.value > 0)
+    ? dynamicStatusDistributionData
+    : STATUS_DISTRIBUTION_DATA;
+
+  const hasChartData = chartDataToUse.some((p) => p.totalValue > 0 || p.remainingBalance > 0);
+  const hasStatusData = statusDataToUse.some((s) => s.value > 0);
 
   return (
     <div className="space-y-6 text-xs">
@@ -173,7 +244,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
           <div className="h-64 w-full text-xs relative flex items-center justify-center">
             {hasChartData ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={PROJECT_CHART_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                <BarChart data={chartDataToUse} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
                   <XAxis dataKey="projectName" tick={{ fontSize: 10 }} />
                   <YAxis tickFormatter={(v) => formatINRCompact(v)} tick={{ fontSize: 10 }} />
                   <Tooltip
@@ -208,7 +279,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={STATUS_DISTRIBUTION_DATA}
+                    data={statusDataToUse}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -216,7 +287,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {STATUS_DISTRIBUTION_DATA.map((entry, index) => (
+                    {statusDataToUse.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -237,9 +308,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
             </div>
           </div>
 
-          {/* LEGEND WITH ZERO COUNTS */}
+          {/* LEGEND WITH COUNTS */}
           <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-100">
-            {STATUS_DISTRIBUTION_DATA.map((d) => (
+            {statusDataToUse.map((d) => (
               <div key={d.name} className="flex items-center justify-between p-1 rounded bg-slate-50">
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }}></span>

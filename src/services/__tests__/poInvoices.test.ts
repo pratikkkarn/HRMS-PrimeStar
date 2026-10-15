@@ -5,7 +5,11 @@ import { Invoice } from '../../types/domain';
 
 describe('Purchase Order Invoices & Balance Module', () => {
   const hdfcPo = INITIAL_POS.find((p) => p.id === 'po-101')!;
-  const infyPo = INITIAL_POS.find((p) => p.id === 'po-102')!;
+  const rawInfyPo = INITIAL_POS.find((p) => p.id === 'po-102')!;
+  const infyPo = {
+    ...rawInfyPo,
+    invoices: rawInfyPo.invoices.map((inv) => ({ ...inv, status: 'Issued' as const })),
+  };
 
   describe('1. HDFC PO (po-101) Independent Calculations', () => {
     it('should calculate PO-specific financial values correctly for HDFC', () => {

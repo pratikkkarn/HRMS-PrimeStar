@@ -16,10 +16,11 @@ import {
   Filter,
   RotateCcw,
   FolderPlus,
+  UserCheck,
 } from 'lucide-react';
 
 export const ProjectsView: React.FC = () => {
-  const { projects, purchaseOrders, addProject } = useData();
+  const { projects, purchaseOrders, employees, addProject } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -28,12 +29,21 @@ export const ProjectsView: React.FC = () => {
   const [name, setName] = useState('');
   const [clientName, setClientName] = useState('');
   const [code, setCode] = useState(`PRJ-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [projectManager, setProjectManager] = useState('Siddharth Mehta');
+  const [selectedPms, setSelectedPms] = useState<string[]>(['Siddharth Mehta']);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(
     new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [description, setDescription] = useState('');
+
+  // Available PM list from directory
+  const availablePmOptions = useMemo(() => {
+    const list = new Set<string>(['Siddharth Mehta', 'Rohan Deshmukh', 'Priya Sharma']);
+    employees.forEach((e) => {
+      if (e.name) list.add(e.name);
+    });
+    return Array.from(list).sort();
+  }, [employees]);
 
   // Compute metrics dynamically from projects and linked POs
   const projectStats = useMemo(() => {
@@ -66,12 +76,15 @@ export const ProjectsView: React.FC = () => {
   // Filter projects by search and status
   const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
+      const pms = p.projectManagers && p.projectManagers.length > 0 ? p.projectManagers : [p.projectManager || 'Siddharth Mehta'];
+      const pmMatch = pms.some((pm) => pm.toLowerCase().includes(searchQuery.toLowerCase()));
+
       const matchesSearch =
         searchQuery.trim() === '' ||
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.projectManager.toLowerCase().includes(searchQuery.toLowerCase());
+        pmMatch;
 
       const matchesStatus =
         statusFilter === 'All' || p.status.toLowerCase() === statusFilter.toLowerCase();
@@ -89,21 +102,30 @@ export const ProjectsView: React.FC = () => {
     setName('');
     setClientName('');
     setCode(`PRJ-${Math.floor(1000 + Math.random() * 9000)}`);
-    setProjectManager('Siddharth Mehta');
+    setSelectedPms(['Siddharth Mehta']);
     setStartDate(new Date().toISOString().split('T')[0]);
     setEndDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     setDescription('');
+  };
+
+  const togglePmSelection = (pmName: string) => {
+    setSelectedPms((prev) =>
+      prev.includes(pmName) ? (prev.length > 1 ? prev.filter((p) => p !== pmName) : prev) : [...prev, pmName]
+    );
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !clientName.trim()) return;
 
+    const primaryPm = selectedPms[0] || 'Siddharth Mehta';
+
     addProject({
       name: name.trim(),
       clientName: clientName.trim(),
       code: code.trim() || `PRJ-${Math.floor(1000 + Math.random() * 9000)}`,
-      projectManager: projectManager.trim() || 'Siddharth Mehta',
+      projectManager: primaryPm,
+      projectManagers: selectedPms,
       startDate,
       endDate,
       status: 'Active',
@@ -267,11 +289,16 @@ export const ProjectsView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between text-slate-600 pt-2 border-t border-slate-100 text-[11px]">
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3 text-slate-400" />
-                    PM: <strong className="text-slate-800">{p.projectManager}</strong>
+                  <span className="flex items-center gap-1 flex-wrap">
+                    <Users className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-slate-500">PMs:</span>
+                    {(p.projectManagers && p.projectManagers.length > 0 ? p.projectManagers : [p.projectManager || 'Siddharth Mehta']).map((pm, idx) => (
+                      <span key={idx} className="bg-slate-100 text-slate-800 font-semibold px-1.5 py-0.5 rounded text-[10px]">
+                        {pm}
+                      </span>
+                    ))}
                   </span>
-                  <span className="font-medium text-slate-700">{projPOs.length} Active POs</span>
+                  <span className="font-medium text-slate-700 shrink-0">{projPOs.length} Active POs</span>
                 </div>
               </Card>
             );
@@ -310,12 +337,30 @@ export const ProjectsView: React.FC = () => {
                 onChange={(e) => setCode(e.target.value)}
                 required
               />
-              <Input
-                label="Project Manager *"
-                value={projectManager}
-                onChange={(e) => setProjectManager(e.target.value)}
-                required
-              />
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Assigned Project Managers *</label>
+                <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-lg max-h-28 overflow-y-auto">
+                  {availablePmOptions.map((pmName) => {
+                    const isSelected = selectedPms.includes(pmName);
+                    return (
+                      <button
+                        type="button"
+                        key={pmName}
+                        onClick={() => togglePmSelection(pmName)}
+                        className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-2xs'
+                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {isSelected && <UserCheck className="w-3 h-3" />}
+                        <span>{pmName}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">Select one or more managers responsible for this project.</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

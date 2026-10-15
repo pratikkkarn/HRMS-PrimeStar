@@ -4,6 +4,7 @@ import { useRole } from '../../../context/RoleContext';
 import { useNotification } from '../../../context/NotificationContext';
 import { EmployeeAssignment, AssignmentStatus } from '../../../types/domain';
 import { formatDate, formatINR } from '../../../lib/utils';
+import { validateEmployeeAllocation, getValidPoForProject, getTargetProjectForEmployee } from '../../../lib/assignmentUtils';
 import {
   Users,
   Briefcase,
@@ -43,25 +44,43 @@ export const AssignmentsView: React.FC = () => {
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All');
 
+  // Helper to normalize legacy project IDs to match active projects
+  const normalizeAssignmentProjectIds = (list: EmployeeAssignment[]): EmployeeAssignment[] => {
+    const projectMap: Record<string, string> = {
+      'proj-1': 'proj-hdfc-01',
+      'proj-2': 'proj-infy-02',
+      'proj-3': 'proj-hdfc-01',
+    };
+    return list.map((a) => {
+      if (a.projectId && projectMap[a.projectId]) {
+        return { ...a, projectId: projectMap[a.projectId] };
+      }
+      return a;
+    });
+  };
+
   // Master Assignments State with localStorage Persistence
   const [assignments, setAssignments] = useState<EmployeeAssignment[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS_ASSIGNMENTS);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return normalizeAssignmentProjectIds(parsed);
+        }
       }
     } catch (e) {
       console.error('Error loading assignments from localStorage:', e);
     }
     // Default seed assignments if not stored
-    return [
+    return normalizeAssignmentProjectIds([
       {
         id: 'asgn-101',
         employeeId: 'PS-108',
         employeeName: 'Rohan Deshmukh',
         designation: 'Senior Cloud Architect',
         department: 'Technology Consulting',
-        projectId: 'proj-1',
+        projectId: 'proj-hdfc-01',
         projectName: 'HDFC Bank Core Cloud Migration',
         poId: 'po-101',
         poNumber: 'PO/2025/HDFC/001',
@@ -78,7 +97,7 @@ export const AssignmentsView: React.FC = () => {
         employeeName: 'Megha Kulkarni',
         designation: 'DevOps Lead Engineer',
         department: 'Cloud Infrastructure',
-        projectId: 'proj-1',
+        projectId: 'proj-hdfc-01',
         projectName: 'HDFC Bank Core Cloud Migration',
         poId: 'po-101',
         poNumber: 'PO/2025/HDFC/001',
@@ -95,7 +114,7 @@ export const AssignmentsView: React.FC = () => {
         employeeName: 'Siddharth Mehta',
         designation: 'Delivery Director — Cloud & Analytics',
         department: 'Consulting Delivery',
-        projectId: 'proj-2',
+        projectId: 'proj-infy-02',
         projectName: 'Infosys Finacle AI Modernization',
         poId: 'po-102',
         poNumber: 'PO/2025/INFY/0032',
@@ -112,7 +131,7 @@ export const AssignmentsView: React.FC = () => {
         employeeName: 'Kavita Nair',
         designation: 'PO & Billing Operations Lead',
         department: 'Operations',
-        projectId: 'proj-2',
+        projectId: 'proj-infy-02',
         projectName: 'Infosys Finacle AI Modernization',
         poId: 'po-102',
         poNumber: 'PO/2025/INFY/0032',
@@ -129,15 +148,15 @@ export const AssignmentsView: React.FC = () => {
         employeeName: 'Ananya Roy',
         designation: 'HR Onboarding Specialist',
         department: 'Human Resources',
-        projectId: 'proj-3',
-        projectName: 'Reliance Digital Transformation',
+        projectId: 'proj-hdfc-01',
+        projectName: 'HDFC Bank Core Cloud Migration',
         assignedFrom: '2025-01-01',
         assignedTo: '2025-10-31',
         allocationPercentage: 100,
         status: 'Ending Soon',
         notes: 'Consultant staffing & onboarding coordination.',
       },
-    ];
+    ]);
   });
 
   // Modals state
@@ -152,7 +171,7 @@ export const AssignmentsView: React.FC = () => {
   const [formDesignation, setFormDesignation] = useState('');
   const [formAssignedFrom, setFormAssignedFrom] = useState('');
   const [formAssignedTo, setFormAssignedTo] = useState('');
-  const [formAllocationPercentage, setFormAllocationPercentage] = useState<number>(100);
+  const [formAllocationPercentage, setFormAllocationPercentage] = useState<string>('100');
   const [formBillingRate, setFormBillingRate] = useState<string>('');
   const [formStatus, setFormStatus] = useState<AssignmentStatus>('Active');
   const [formNotes, setFormNotes] = useState('');
@@ -248,9 +267,20 @@ export const AssignmentsView: React.FC = () => {
 
   // Open Create Modal
   const handleOpenCreateModal = () => {
+    const initialEmpId = employees[0]?.employeeId || '';
     setEditingAssignment(null);
-    setFormEmployeeId(employees[0]?.employeeId || '');
-    setFormProjectId(projects[0]?.id || '');
+    setFormEmployeeId(initialEmpId);
+
+    const projResolution = getTargetProjectForEmployee({
+      employeeId: initialEmpId,
+      assignments,
+      currentProjectId: projects[0]?.id || '',
+      defaultProjectId: projects[0]?.id || '',
+      employees,
+      projects,
+    });
+
+    setFormProjectId(projResolution.projectId);
     setFormPoId('');
     setFormDesignation(employees[0]?.designation || '');
     setFormAssignedFrom(new Date().toISOString().split('T')[0]);
@@ -260,7 +290,7 @@ export const AssignmentsView: React.FC = () => {
     nextYear.setFullYear(nextYear.getFullYear() + 1);
     setFormAssignedTo(nextYear.toISOString().split('T')[0]);
 
-    setFormAllocationPercentage(100);
+    setFormAllocationPercentage('100');
     setFormBillingRate('');
     setFormStatus('Active');
     setFormNotes('');
@@ -274,10 +304,12 @@ export const AssignmentsView: React.FC = () => {
     setFormEmployeeId(asgn.employeeId);
     setFormProjectId(asgn.projectId);
     setFormPoId(asgn.poId || '');
-    setFormDesignation(asgn.designation);
+    setFormDesignation(asgn.designation || '');
     setFormAssignedFrom(asgn.assignedFrom);
     setFormAssignedTo(asgn.assignedTo);
-    setFormAllocationPercentage(asgn.allocationPercentage || 100);
+    setFormAllocationPercentage(
+      asgn.allocationPercentage !== undefined ? String(asgn.allocationPercentage) : '100'
+    );
     setFormBillingRate(asgn.billingRatePerMonth ? String(asgn.billingRatePerMonth) : '');
     setFormStatus(asgn.status);
     setFormNotes(asgn.notes || '');
@@ -285,13 +317,34 @@ export const AssignmentsView: React.FC = () => {
     setModalOpen(true);
   };
 
-  // Handle Employee Change in Form to auto-populate designation
+  // Handle Employee Change in Form to auto-populate designation and target project
   const handleEmployeeChange = (empId: string) => {
     setFormEmployeeId(empId);
     const selectedEmp = employees.find((e) => e.employeeId === empId);
     if (selectedEmp && !editingAssignment) {
       setFormDesignation(selectedEmp.designation);
     }
+
+    // Auto-sync target project for selected employee if single or multiple existing projects exist
+    const projResolution = getTargetProjectForEmployee({
+      employeeId: empId,
+      assignments,
+      currentProjectId: formProjectId,
+      defaultProjectId: projects[0]?.id || '',
+      employees,
+      projects,
+    });
+
+    setFormProjectId(projResolution.projectId);
+    const validPo = getValidPoForProject(formPoId, projResolution.projectId, purchaseOrders);
+    setFormPoId(validPo);
+  };
+
+  // Handle Project Change in Form: clear or preserve PO based on project validity
+  const handleProjectChange = (newProjId: string) => {
+    setFormProjectId(newProjId);
+    const validPo = getValidPoForProject(formPoId, newProjId, purchaseOrders);
+    setFormPoId(validPo);
   };
 
   // Available POs for selected project in form
@@ -331,13 +384,15 @@ export const AssignmentsView: React.FC = () => {
       return;
     }
 
-    // 3. Validation: Allocation Percentage
+    // 3. Validation: Numeric Allocation Percentage
+    const numericAllocation = parseInt(formAllocationPercentage, 10);
     if (
-      isNaN(formAllocationPercentage) ||
-      formAllocationPercentage <= 0 ||
-      formAllocationPercentage > 100
+      !formAllocationPercentage ||
+      isNaN(numericAllocation) ||
+      numericAllocation <= 0 ||
+      numericAllocation > 100
     ) {
-      setFormError('Allocation percentage must be a number between 1% and 100%.');
+      setFormError('Allocation percentage must be a valid number greater than 0% and at most 100%.');
       return;
     }
 
@@ -345,7 +400,7 @@ export const AssignmentsView: React.FC = () => {
     const empName = targetEmp ? targetEmp.name : 'Selected Employee';
     const targetProj = projects.find((p) => p.id === formProjectId);
     const projName = targetProj ? targetProj.name : 'Selected Project';
-    const targetPo = purchaseOrders.find((p) => p.id === formPoId);
+    const targetPo = purchaseOrders.find((p) => p.id === formPoId && p.projectId === formProjectId);
 
     // 4. Validation: Duplicate active assignment for same employee & project
     if (formStatus === 'Active') {
@@ -366,25 +421,25 @@ export const AssignmentsView: React.FC = () => {
       }
     }
 
-    // 5. Validation: Total active allocation for employee across active assignments <= 100%
-    if (formStatus === 'Active') {
-      const existingActiveAllocationSum = assignments
-        .filter((a) => {
-          if (editingAssignment && a.id === editingAssignment.id) return false;
-          return a.employeeId === formEmployeeId && a.status === 'Active';
-        })
-        .reduce((sum, a) => sum + (a.allocationPercentage || 0), 0);
+    // 5. Validation: Enforce 100% active allocation cap across simultaneous active assignments
+    const allocationValidation = validateEmployeeAllocation({
+      employeeId: formEmployeeId,
+      employeeName: empName,
+      requestedAllocation: numericAllocation,
+      assignments,
+      editingAssignmentId: editingAssignment?.id,
+      status: formStatus,
+      assignedFrom: formAssignedFrom,
+      assignedTo: formAssignedTo,
+    });
 
-      const totalNewAllocation = existingActiveAllocationSum + formAllocationPercentage;
-      if (totalNewAllocation > 100) {
-        setFormError(
-          `Total active allocation for ${empName} cannot exceed 100%. Current active allocation is ${existingActiveAllocationSum}%, requested is ${formAllocationPercentage}% (Total: ${totalNewAllocation}%).`
-        );
-        return;
-      }
+    if (!allocationValidation.valid) {
+      setFormError(allocationValidation.error || 'Allocation percentage validation failed.');
+      return;
     }
 
     const billingRateVal = formBillingRate ? parseFloat(formBillingRate) : undefined;
+    const calculatedHours = Math.round(160 * (numericAllocation / 100));
 
     // CREATE OR UPDATE RECORD
     if (editingAssignment) {
@@ -401,7 +456,8 @@ export const AssignmentsView: React.FC = () => {
         poNumber: targetPo?.poNumber,
         assignedFrom: formAssignedFrom,
         assignedTo: formAssignedTo,
-        allocationPercentage: formAllocationPercentage,
+        allocationPercentage: numericAllocation,
+        allocatedHoursPerMonth: calculatedHours,
         billingRatePerMonth: billingRateVal,
         status: formStatus,
         notes: formNotes,
@@ -442,7 +498,8 @@ export const AssignmentsView: React.FC = () => {
         poNumber: targetPo?.poNumber,
         assignedFrom: formAssignedFrom,
         assignedTo: formAssignedTo,
-        allocationPercentage: formAllocationPercentage,
+        allocationPercentage: numericAllocation,
+        allocatedHoursPerMonth: calculatedHours,
         billingRatePerMonth: billingRateVal,
         status: formStatus,
         notes: formNotes,
@@ -964,13 +1021,11 @@ export const AssignmentsView: React.FC = () => {
                   </label>
                   <select
                     value={formProjectId}
-                    onChange={(e) => {
-                      setFormProjectId(e.target.value);
-                      setFormPoId('');
-                    }}
+                    onChange={(e) => handleProjectChange(e.target.value)}
                     required
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 font-medium cursor-pointer"
                   >
+                    <option value="">-- Select Target Project --</option>
                     {projects.map((proj) => (
                       <option key={proj.id} value={proj.id}>
                         {proj.name} ({proj.clientName})
@@ -1011,6 +1066,12 @@ export const AssignmentsView: React.FC = () => {
                     required
                     value={formDesignation}
                     onChange={(e) => setFormDesignation(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        (e.target as HTMLElement).blur();
+                      }
+                    }}
                     placeholder="e.g. Senior Cloud Architect"
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 font-medium"
                   />
@@ -1054,13 +1115,33 @@ export const AssignmentsView: React.FC = () => {
                   </label>
                   <div className="flex items-center gap-2">
                     <input
-                      type="number"
-                      min="10"
-                      max="100"
-                      step="5"
+                      type="text"
+                      inputMode="numeric"
                       required
                       value={formAllocationPercentage}
-                      onChange={(e) => setFormAllocationPercentage(parseInt(e.target.value) || 0)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setFormAllocationPercentage(val);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          (e.target as HTMLElement).blur();
+                        }
+                      }}
+                      onBlur={() => {
+                        if (formAllocationPercentage && formAllocationPercentage.trim() !== '') {
+                          const parsed = parseInt(formAllocationPercentage, 10);
+                          if (!isNaN(parsed)) {
+                            if (parsed > 100) setFormAllocationPercentage('100');
+                            else if (parsed < 1) setFormAllocationPercentage('1');
+                            else setFormAllocationPercentage(String(parsed));
+                          }
+                        }
+                      }}
+                      placeholder="100"
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 font-medium font-mono"
                     />
                     <span className="font-bold text-slate-600 text-sm">%</span>
@@ -1077,6 +1158,12 @@ export const AssignmentsView: React.FC = () => {
                     placeholder="e.g. 200000"
                     value={formBillingRate}
                     onChange={(e) => setFormBillingRate(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        (e.target as HTMLElement).blur();
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 font-medium font-mono"
                   />
                 </div>

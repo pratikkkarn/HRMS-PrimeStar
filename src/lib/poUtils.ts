@@ -1,4 +1,4 @@
-import { PurchaseOrder, Project } from '../types/domain';
+import { PurchaseOrder, Project, Invoice } from '../types/domain';
 
 export interface POCounts {
   taxInvoiceCount: number;
@@ -27,22 +27,27 @@ export const getPOCounts = (po: PurchaseOrder): POCounts => {
 
 /**
  * Recalculates PO financial balances based strictly on PO-specific invoices & credit notes.
+ * Status rules:
+ * - 'Issued' or 'Paid': Active transactions. Mutate net invoiced totals and PO balance.
+ * - 'Pending': Draft/unapproved. Zero financial effect until approved/issued.
+ * - 'Cancelled': Voided. Zero financial effect.
+ *
  * Formula:
- * - Gross Invoiced (excl GST) = sum of all active tax invoices (!isCreditNote && status !== 'Cancelled')
- * - Credit Notes (excl GST) = sum of all active credit notes (isCreditNote && status !== 'Cancelled')
+ * - Gross Invoiced (excl GST) = sum of all active tax invoices (!isCreditNote && (status === 'Issued' || status === 'Paid'))
+ * - Credit Notes (excl GST) = sum of all active credit notes (isCreditNote && (status === 'Issued' || status === 'Paid'))
  * - Remaining PO Balance (excl GST) = PO Amount - Gross Invoiced + Credit Notes
- *   (Credit Notes restore the available PO balance exactly once)
  */
 export const recalculatePOBalances = (po: PurchaseOrder): PurchaseOrder => {
   let invoicedExclGst = 0;
   let creditNotesExclGst = 0;
 
   po.invoices.forEach((inv) => {
-    if (inv.status !== 'Cancelled') {
+    // Only Issued or Paid invoices/credit notes affect active financial totals
+    if (inv.status === 'Issued' || inv.status === 'Paid') {
       if (inv.isCreditNote) {
-        creditNotesExclGst += inv.amountExclGst;
+        creditNotesExclGst += Math.abs(inv.amountExclGst);
       } else {
-        invoicedExclGst += inv.amountExclGst;
+        invoicedExclGst += Math.abs(inv.amountExclGst);
       }
     }
   });
@@ -79,6 +84,46 @@ export const recalculatePOBalances = (po: PurchaseOrder): PurchaseOrder => {
 };
 
 /**
+ * Validates whether a new tax invoice amount exceeds the available PO balance.
+ */
+export const validateNewInvoiceAmount = (po: PurchaseOrder, newAmountExclGst: number): { valid: boolean; error?: string } => {
+  const recalculated = recalculatePOBalances(po);
+  if (newAmountExclGst <= 0) {
+    return { valid: false, error: 'Invoice amount must be greater than zero.' };
+  }
+  if (newAmountExclGst > recalculated.remainingBalanceExclGst) {
+    return {
+      valid: false,
+      error: `Invoice amount (₹${newAmountExclGst.toLocaleString('en-IN')}) exceeds available remaining PO balance (₹${recalculated.remainingBalanceExclGst.toLocaleString('en-IN')}).`,
+    };
+  }
+  return { valid: true };
+};
+
+/**
+ * Validates whether a new credit note is eligible based on gross active previously invoiced tax totals for the PO.
+ * Rule: Eligible Amount to Credit = Gross Active Tax Invoiced - Existing Active Credit Notes.
+ * Credit notes are NOT rejected simply because the remaining PO balance is low or zero.
+ */
+export const validateNewCreditNoteAmount = (po: PurchaseOrder, creditAmountExclGst: number): { valid: boolean; error?: string } => {
+  const recalculated = recalculatePOBalances(po);
+  if (creditAmountExclGst <= 0) {
+    return { valid: false, error: 'Credit note amount must be greater than zero.' };
+  }
+  const eligibleAmount = recalculated.invoicedExclGst - recalculated.creditNotesExclGst;
+  if (eligibleAmount <= 0) {
+    return { valid: false, error: 'No active previously invoiced amounts exist on this PO to issue a credit note against.' };
+  }
+  if (creditAmountExclGst > eligibleAmount) {
+    return {
+      valid: false,
+      error: `Credit note amount (₹${creditAmountExclGst.toLocaleString('en-IN')}) exceeds eligible net invoiced amount (₹${eligibleAmount.toLocaleString('en-IN')}).`,
+    };
+  }
+  return { valid: true };
+};
+
+/**
  * Recalculates Project financial totals based on PO-specific active purchase orders.
  */
 export const recalculateProjectBalances = (projects: Project[], purchaseOrders: PurchaseOrder[]): Project[] => {
@@ -93,3 +138,4 @@ export const recalculateProjectBalances = (projects: Project[], purchaseOrders: 
     };
   });
 };
+

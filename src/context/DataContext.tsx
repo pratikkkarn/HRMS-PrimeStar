@@ -45,7 +45,128 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'primestar_notifications',
   PROFILE_REQUESTS: 'primestar_profile_requests',
   USER_PREFS: 'primestar_user_preferences',
+  CUSTOM_DOCS: 'primestar_custom_documents',
+  DELETED_DOC_IDS: 'primestar_deleted_doc_ids',
+  ASSIGNMENTS: 'primestar_employee_assignments',
 };
+
+export const ALL_SYSTEM_STORAGE_KEYS = [
+  'primestar_projects',
+  'primestar_sows',
+  'primestar_quotations',
+  'primestar_purchase_orders',
+  'primestar_candidates',
+  'primestar_employees',
+  'primestar_timesheets',
+  'primestar_notifications',
+  'primestar_profile_requests',
+  'primestar_user_preferences',
+  'primestar_custom_documents',
+  'primestar_deleted_doc_ids',
+  'primestar_employee_assignments',
+];
+
+export function createVerifiedLocalStorageBackup(): { success: boolean; backupKey?: string; error?: string } {
+  try {
+    const timestamp = Date.now();
+    const backupKey = `primestar_backup_${timestamp}`;
+    const snapshot: Record<string, string | null> = {};
+
+    ALL_SYSTEM_STORAGE_KEYS.forEach((k) => {
+      snapshot[k] = localStorage.getItem(k);
+    });
+
+    const jsonStr = JSON.stringify(snapshot);
+    localStorage.setItem(backupKey, jsonStr);
+
+    // Verify backup
+    const readBack = localStorage.getItem(backupKey);
+    if (!readBack) {
+      return { success: false, error: 'Backup verification failed: written snapshot key not found.' };
+    }
+    const parsed = JSON.parse(readBack);
+    const hasAllKeys = ALL_SYSTEM_STORAGE_KEYS.every((k) => k in parsed);
+    if (!hasAllKeys) {
+      return { success: false, error: 'Backup verification failed: missing key in parsed snapshot.' };
+    }
+
+    return { success: true, backupKey };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Error creating localStorage backup' };
+  }
+}
+
+export function migrateLegacyDataIdempotent(): void {
+  try {
+    const isMigrated = localStorage.getItem('primestar_migration_version') === 'v2';
+    if (isMigrated) return;
+
+    // 1. Create verified backup first
+    const backupResult = createVerifiedLocalStorageBackup();
+    if (!backupResult.success) {
+      console.error('Migration aborted: backup creation or verification failed.', backupResult.error);
+      return;
+    }
+
+    // 2. Migrate Projects: ensure projectManagers array exists
+    const rawProjects = loadStoredData<Project[]>(STORAGE_KEYS.PROJECTS, INITIAL_PROJECTS);
+    let projectsMigrated = false;
+    const nextProjects = rawProjects.map((p) => {
+      if (p._migrated_v2) return p;
+      projectsMigrated = true;
+      const pms = p.projectManagers && p.projectManagers.length > 0 ? p.projectManagers : [p.projectManager || 'Siddharth Mehta'];
+      return {
+        ...p,
+        projectManagers: pms,
+        _migrated_v2: true,
+      };
+    });
+    if (projectsMigrated) {
+      localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(nextProjects));
+    }
+
+    // 3. Migrate Purchase Orders & Invoices: derive billingMonth & billingYear if missing
+    const rawPOs = loadStoredData<PurchaseOrder[]>(STORAGE_KEYS.POS, INITIAL_POS);
+    let posMigrated = false;
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    const nextPOs = rawPOs.map((po) => {
+      let poChanged = false;
+      const nextInvoices = po.invoices.map((inv) => {
+        if (inv.billingMonth && inv.billingYear) return inv;
+        poChanged = true;
+        const d = new Date(inv.invoiceDate || '2026-10-01');
+        const bMonth = monthNames[d.getMonth()] || 'October';
+        const bYear = d.getFullYear() || 2026;
+        return {
+          ...inv,
+          billingMonth: bMonth,
+          billingYear: bYear,
+          billingPeriod: `${bMonth} ${bYear}`,
+        };
+      });
+
+      if (poChanged || !po._migrated_v2) {
+        posMigrated = true;
+        return {
+          ...po,
+          invoices: nextInvoices,
+          _migrated_v2: true,
+        };
+      }
+      return po;
+    });
+
+    if (posMigrated) {
+      localStorage.setItem(STORAGE_KEYS.POS, JSON.stringify(nextPOs));
+    }
+
+    // Mark migration version v2
+    localStorage.setItem('primestar_migration_version', 'v2');
+  } catch (e) {
+    console.error('Error during data migration:', e);
+  }
+}
 
 function loadStoredData<T>(key: string, fallback: T): T {
   try {
@@ -154,7 +275,13 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Execute idempotent migration and backup on startup
+  useEffect(() => {
+    migrateLegacyDataIdempotent();
+  }, []);
+
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(() => {
+    migrateLegacyDataIdempotent();
     const raw = loadStoredData<PurchaseOrder[]>(STORAGE_KEYS.POS, INITIAL_POS);
     return raw.map((po) => recalculatePOBalances(po));
   });
@@ -288,12 +415,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const addProject = (data: Omit<Project, 'id' | 'totalPoValue' | 'remainingBalance' | 'assignedHeadcount'>): Project => {
+    const pms = data.projectManagers && data.projectManagers.length > 0 ? data.projectManagers : [data.projectManager || 'Siddharth Mehta'];
     const newProj: Project = {
       ...data,
+      projectManager: data.projectManager || pms[0],
+      projectManagers: pms,
       id: `proj-${Date.now()}`,
       assignedHeadcount: 0,
       totalPoValue: 0,
       remainingBalance: 0,
+      _migrated_v2: true,
     };
     setProjects((prev) => [newProj, ...prev]);
     showToast('Project Created', `Project "${data.name}" added successfully.`);
@@ -505,10 +636,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const gstAmount = invoiceData.amountExclGst * (invoiceData.gstRate / 100);
     const totalAmountInclGst = invoiceData.amountExclGst + gstAmount;
 
+    const d = new Date(invoiceData.invoiceDate || Date.now());
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const bMonth = invoiceData.billingMonth || monthNames[d.getMonth()] || 'October';
+    const bYear = invoiceData.billingYear || d.getFullYear() || 2026;
+    const bPeriod = invoiceData.billingPeriod || `${bMonth} ${bYear}`;
+
     const newInvoice: Invoice = {
       ...invoiceData,
       id: `inv-${Date.now()}`,
       poId,
+      billingMonth: bMonth,
+      billingYear: bYear,
+      billingPeriod: bPeriod,
       gstAmount,
       totalAmountInclGst,
     };
