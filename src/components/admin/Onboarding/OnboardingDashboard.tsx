@@ -31,7 +31,16 @@ import { SalaryStructureBuilder } from './SalaryStructureBuilder';
 import { OfferLetterModal } from './OfferLetterModal';
 import { CandidateOnboarding } from '../../../types/domain';
 
-export const OnboardingDashboard: React.FC = () => {
+interface OnboardingDashboardProps {
+  onNavigate?: (tab: string, params?: any) => void;
+  initialTab?: string;
+  initialStatusFilter?: string;
+}
+
+export const OnboardingDashboard: React.FC<OnboardingDashboardProps> = ({
+  onNavigate,
+  initialStatusFilter,
+}) => {
   const { candidates, editCandidateDetails, cancelCandidateOnboarding } = useData();
   const { permissions } = useRole();
 
@@ -47,11 +56,17 @@ export const OnboardingDashboard: React.FC = () => {
 
   // Search & Filters state
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter || 'ALL');
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [designationFilter, setDesignationFilter] = useState('ALL');
   const [hrFilter, setHrFilter] = useState('ALL');
   const [joiningDateFilter, setJoiningDateFilter] = useState('');
+
+  React.useEffect(() => {
+    if (initialStatusFilter) {
+      setStatusFilter(initialStatusFilter);
+    }
+  }, [initialStatusFilter]);
 
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
@@ -176,37 +191,48 @@ export const OnboardingDashboard: React.FC = () => {
           value={totalCandidates}
           subtitle="Pipeline headcount"
           icon={<UserCheck className="w-4 h-4 text-indigo-600" />}
+          onClick={() => setStatusFilter('ALL')}
+          className={statusFilter === 'ALL' ? 'ring-2 ring-indigo-500/20 bg-indigo-50/20' : ''}
         />
         <StatCard
           title="Not Started"
           value={notStartedCount}
           subtitle="Invite sent to candidate"
           icon={<Clock className="w-4 h-4 text-slate-400" />}
+          onClick={() => setStatusFilter('Not Started')}
+          className={statusFilter === 'Not Started' ? 'ring-2 ring-slate-500/20 bg-slate-50/20' : ''}
         />
         <StatCard
           title="In Progress"
           value={inProgressCount}
           subtitle="Candidate filling form"
           icon={<Clock className="w-4 h-4 text-amber-500" />}
+          onClick={() => setStatusFilter('In Progress')}
+          className={statusFilter === 'In Progress' ? 'ring-2 ring-amber-500/20 bg-amber-50/20' : ''}
         />
         <StatCard
           title="Awaiting Review"
           value={awaitingReviewCount}
           subtitle="Submitted / HR review"
           icon={<FileText className="w-4 h-4 text-indigo-600" />}
-          className={awaitingReviewCount > 0 ? 'bg-indigo-50/40 border-indigo-200' : ''}
+          onClick={() => setStatusFilter('Awaiting Review')}
+          className={statusFilter === 'Awaiting Review' ? 'ring-2 ring-indigo-500/20 bg-indigo-50/30' : awaitingReviewCount > 0 ? 'bg-indigo-50/40 border-indigo-200' : ''}
         />
         <StatCard
           title="Offers Released"
           value={offerReleasedCount}
           subtitle="Letter released"
           icon={<Send className="w-4 h-4 text-emerald-600" />}
+          onClick={() => setStatusFilter('Offers Released')}
+          className={statusFilter === 'Offers Released' ? 'ring-2 ring-emerald-500/20 bg-emerald-50/20' : ''}
         />
         <StatCard
           title="Completed"
           value={completedCount}
           subtitle="Confirmed / Joined"
           icon={<UserCheck className="w-4 h-4 text-emerald-600" />}
+          onClick={() => setStatusFilter('Completed')}
+          className={statusFilter === 'Completed' ? 'ring-2 ring-emerald-500/20 bg-emerald-50/20' : ''}
         />
       </div>
 

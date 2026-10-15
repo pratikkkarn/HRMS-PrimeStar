@@ -37,7 +37,7 @@ import {
 } from 'recharts';
 
 interface AdminDashboardViewProps {
-  onNavigate: (tab: string, poId?: string) => void;
+  onNavigate: (tab: string, params?: any) => void;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNavigate }) => {
@@ -160,7 +160,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
         </div>
       </div>
 
-      {/* 4. SUMMARY CARDS (ALL METRICS SET TO ZERO) */}
+      {/* 4. SUMMARY CARDS (DYNAMIC METRICS) */}
       <div className="space-y-4">
         {/* TOP FOUR COUNT CARDS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -169,30 +169,37 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
             value={summary.totalPOs}
             subtitle={summary.totalPOValueStr}
             icon={<FileText className="w-4 h-4 text-blue-600" />}
+            onClick={() => onNavigate('po-tracker', { statusFilter: 'ALL' })}
           />
           <StatCard
             title="Active POs"
             value={summary.activePOs}
             subtitle={summary.activePOValueStr}
             icon={<CheckCircle className="w-4 h-4 text-emerald-600" />}
+            onClick={() => onNavigate('po-tracker', { statusFilter: 'Active' })}
           />
           <StatCard
             title="Expiring Soon"
             value={summary.expiringSoonPOs}
             subtitle={summary.expiringValueStr}
             icon={<Clock className="w-4 h-4 text-amber-600" />}
+            onClick={() => onNavigate('po-tracker', { statusFilter: 'Expiring Soon' })}
           />
           <StatCard
             title="Low Balance"
             value={summary.lowBalancePOs}
             subtitle={summary.lowBalanceValueStr}
             icon={<AlertTriangle className="w-4 h-4 text-red-600" />}
+            onClick={() => onNavigate('po-tracker', { statusFilter: 'Low Balance' })}
           />
         </div>
 
         {/* TWO FINANCIAL SUMMARY CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Card className="p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/40 border-blue-200">
+          <Card
+            onClick={() => onNavigate('po-tracker', { statusFilter: 'ALL' })}
+            className="p-4 bg-gradient-to-r from-blue-50/80 to-indigo-50/40 border-blue-200 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block mb-1">
@@ -209,7 +216,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
             </div>
           </Card>
 
-          <Card className="p-4 bg-gradient-to-r from-emerald-50/80 to-teal-50/40 border-emerald-200">
+          <Card
+            onClick={() => onNavigate('po-tracker', { statusFilter: 'ALL' })}
+            className="p-4 bg-gradient-to-r from-emerald-50/80 to-teal-50/40 border-emerald-200 cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block mb-1">
@@ -311,7 +321,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
           {/* LEGEND WITH COUNTS */}
           <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-slate-100">
             {statusDataToUse.map((d) => (
-              <div key={d.name} className="flex items-center justify-between p-1 rounded bg-slate-50">
+              <div
+                key={d.name}
+                onClick={() => onNavigate('po-tracker', { statusFilter: d.name })}
+                className="flex items-center justify-between p-1.5 rounded bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors"
+              >
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }}></span>
                   <span className="text-slate-600 truncate">{d.name}</span>

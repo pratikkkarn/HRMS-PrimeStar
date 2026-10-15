@@ -56,9 +56,9 @@ export function validateEmployeeAllocation(params: {
   const currentActiveAllocation = assignments
     .filter((a) => {
       // Exclude current assignment if editing
-      if (editingAssignmentId && a.id === editingAssignmentId) return false;
+      if (editingAssignmentId && String(a.id).trim() === String(editingAssignmentId).trim()) return false;
       // Must be same employee
-      if (a.employeeId !== employeeId) return false;
+      if (String(a.employeeId).trim() !== String(employeeId).trim()) return false;
       // Must be active or ending soon
       if (a.status !== 'Active' && a.status !== 'Ending Soon') return false;
       // Check date overlap if both assignments have start & end dates
@@ -67,8 +67,10 @@ export function validateEmployeeAllocation(params: {
         const end1 = new Date(assignedTo).getTime();
         const start2 = new Date(a.assignedFrom).getTime();
         const end2 = new Date(a.assignedTo).getTime();
-        const overlaps = start1 <= end2 && end1 >= start2;
-        if (!overlaps) return false;
+        if (!isNaN(start1) && !isNaN(end1) && !isNaN(start2) && !isNaN(end2)) {
+          const overlaps = start1 <= end2 && end1 >= start2;
+          if (!overlaps) return false;
+        }
       }
       return true;
     })
@@ -107,12 +109,23 @@ export function getTargetProjectForEmployee(params: {
   defaultProjectId?: string;
   employees?: { employeeId: string; projectName?: string }[];
   projects?: { id: string; name: string }[];
+  editingAssignmentId?: string | null;
 }): { projectId: string; hasSingleExistingProject: boolean; existingProjects: string[] } {
-  const { employeeId, assignments, currentProjectId, employees = [], projects = [] } = params;
+  const {
+    employeeId,
+    assignments,
+    currentProjectId,
+    employees = [],
+    projects = [],
+    editingAssignmentId,
+  } = params;
 
-  // 1. Find active/applicable project IDs for this employee from assignments
+  // 1. Find active/applicable project IDs for this employee from assignments (excluding the editing assignment)
   const employeeActiveAssignments = assignments.filter(
-    (a) => a.employeeId === employeeId && (a.status === 'Active' || a.status === 'Ending Soon')
+    (a) =>
+      a.employeeId === employeeId &&
+      (!editingAssignmentId || a.id !== editingAssignmentId) &&
+      (a.status === 'Active' || a.status === 'Ending Soon')
   );
 
   const existingAssignmentProjectIds = Array.from(
@@ -162,7 +175,21 @@ export function getTargetProjectForEmployee(params: {
     };
   }
 
-  // 0 applicable projects -> clear project selection (never retain previous employee's project)
+  // 0 applicable projects for this employee:
+  // If editing an existing assignment record (editingAssignmentId is present), preserve currentProjectId as the project being reassigned.
+  if (
+    editingAssignmentId &&
+    currentProjectId &&
+    projects.some((p) => p.id === currentProjectId)
+  ) {
+    return {
+      projectId: currentProjectId,
+      hasSingleExistingProject: false,
+      existingProjects: [],
+    };
+  }
+
+  // If creating a new assignment (editingAssignmentId is null/undefined), clear project selection to prompt user
   return {
     projectId: '',
     hasSingleExistingProject: false,

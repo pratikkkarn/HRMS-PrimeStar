@@ -90,6 +90,10 @@ export interface Invoice {
   documentName?: string;
   documentUrl?: string;
   fileData?: Blob | Uint8Array;
+  employeeIds?: string[];
+  employeeNames?: string[];
+  employeeId?: string;
+  employeeName?: string;
 }
 
 export type AssignmentStatus = 'Active' | 'Ending Soon' | 'Completed' | 'On Hold' | 'Unassigned';

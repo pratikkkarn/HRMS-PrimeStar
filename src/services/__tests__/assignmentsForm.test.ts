@@ -297,6 +297,115 @@ describe('Employee Assignments Form & Allocation Enhancements', () => {
     });
   });
 
+  describe('EDIT WORKFLOW: Kavita Nair -> Vikramaditya Rao Reassignment Tests', () => {
+    const kavitaAsgn: EmployeeAssignment = {
+      id: 'asgn-104',
+      employeeId: 'PS-022',
+      employeeName: 'Kavita Nair',
+      designation: 'PO & Billing Operations Lead',
+      projectId: 'proj-infy-02',
+      projectName: 'Infosys Finacle AI Modernization',
+      poId: 'po-102',
+      poNumber: 'PO/2025/INFY/0032',
+      assignedFrom: '2025-02-01',
+      assignedTo: '2025-11-30',
+      allocationPercentage: 50,
+      status: 'Active',
+    };
+
+    const mockEmployees = [
+      { employeeId: 'PS-022', name: 'Kavita Nair', designation: 'PO & Billing Operations Lead', department: 'Operations' },
+      { employeeId: 'PS-018', name: 'Vikramaditya Rao', designation: 'Senior Finance & Accounts Lead', department: 'Finance' },
+    ];
+
+    const mockProjects = [
+      { id: 'proj-hdfc-01', name: 'HDFC Core Banking Migration' },
+      { id: 'proj-infy-02', name: 'Infosys Finacle AI Modernization' },
+    ];
+
+    it('No-Conflict Case: allows reassigning Kavita Nair (asgn-104) to Vikramaditya Rao when no conflicting assignment exists', () => {
+      const currentAssignments = [kavitaAsgn];
+
+      // Simulate opening edit modal for Kavita Nair's assignment
+      const editingAssignment = kavitaAsgn;
+      let formEmployeeId = editingAssignment.employeeId;
+      let formProjectId = editingAssignment.projectId;
+      let formDesignation = editingAssignment.designation;
+
+      // User changes Employee dropdown to Vikramaditya Rao (PS-018)
+      formEmployeeId = 'PS-018';
+      const selectedEmp = mockEmployees.find((e) => e.employeeId === formEmployeeId)!;
+      formDesignation = selectedEmp.designation;
+
+      const projRes = getTargetProjectForEmployee({
+        employeeId: formEmployeeId,
+        assignments: currentAssignments,
+        currentProjectId: formProjectId,
+        employees: mockEmployees,
+        projects: mockProjects,
+        editingAssignmentId: editingAssignment.id,
+      });
+
+      formProjectId = projRes.projectId;
+
+      // Assert designation updated to Vikramaditya's designation
+      expect(formDesignation).toBe('Senior Finance & Accounts Lead');
+      // Assert target project remains valid assignment project
+      expect(formProjectId).toBe('proj-infy-02');
+
+      // Duplicate check simulation (excluding current editing assignment asgn-104)
+      const duplicateExists = currentAssignments.some((a) => {
+        if (editingAssignment && a.id === editingAssignment.id) return false;
+        return a.employeeId === formEmployeeId && a.projectId === formProjectId && a.status === 'Active';
+      });
+
+      expect(duplicateExists).toBe(false);
+
+      // Allocation check simulation
+      const allocRes = validateEmployeeAllocation({
+        employeeId: formEmployeeId,
+        employeeName: selectedEmp.name,
+        requestedAllocation: 50,
+        assignments: currentAssignments,
+        editingAssignmentId: editingAssignment.id,
+        status: 'Active',
+      });
+
+      expect(allocRes.valid).toBe(true);
+    });
+
+    it('Genuine Conflict Case: blocks reassigning Kavita Nair to Vikramaditya Rao if Vikramaditya ALREADY has an active assignment on the same project', () => {
+      // Vikramaditya Rao ALREADY has an active assignment on proj-infy-02
+      const vikramExistingAsgn: EmployeeAssignment = {
+        id: 'asgn-vikram-existing',
+        employeeId: 'PS-018',
+        employeeName: 'Vikramaditya Rao',
+        designation: 'Senior Finance & Accounts Lead',
+        projectId: 'proj-infy-02',
+        projectName: 'Infosys Finacle AI Modernization',
+        assignedFrom: '2025-01-01',
+        assignedTo: '2026-12-31',
+        allocationPercentage: 50,
+        status: 'Active',
+      };
+
+      const currentAssignments = [kavitaAsgn, vikramExistingAsgn];
+
+      const editingAssignment = kavitaAsgn;
+      const formEmployeeId = 'PS-018';
+      const formProjectId = 'proj-infy-02';
+
+      // Duplicate check simulation
+      const duplicateExists = currentAssignments.some((a) => {
+        if (editingAssignment && a.id === editingAssignment.id) return false;
+        return a.employeeId === formEmployeeId && a.projectId === formProjectId && a.status === 'Active';
+      });
+
+      // Expect duplicate check to be TRUE because asgn-vikram-existing already exists on proj-infy-02!
+      expect(duplicateExists).toBe(true);
+    });
+  });
+
   describe('3. Target Project and Linked PO Dependencies', () => {
     it('clears selected PO if it does not belong to newly selected project', () => {
       // Currently on proj-hdfc-01 with po-101. Switch to proj-infy-02.
@@ -372,6 +481,103 @@ describe('Employee Assignments Form & Allocation Enhancements', () => {
       expect(validation.currentActiveAllocation).toBe(0);
       expect(validation.requestedAllocation).toBe(60);
       expect(validation.proposedTotal).toBe(60);
+    });
+
+    it('ANANYA ROY EDIT REGRESSION: editing Ananya Roy (PS-034, asgn-105) 100% allocation to 50% excludes asgn-105 and succeeds without double counting', () => {
+      const ananyaAssignments: EmployeeAssignment[] = [
+        {
+          id: 'asgn-105',
+          employeeId: 'PS-034',
+          employeeName: 'Ananya Roy',
+          designation: 'HR Onboarding Specialist',
+          projectId: 'proj-hdfc-01',
+          projectName: 'HDFC Bank Core Cloud Migration',
+          assignedFrom: '2025-01-01',
+          assignedTo: '2025-10-31',
+          allocationPercentage: 100,
+          status: 'Ending Soon',
+        },
+      ];
+
+      // 1. Edit asgn-105 and keep 100%
+      const res100 = validateEmployeeAllocation({
+        employeeId: 'PS-034',
+        employeeName: 'Ananya Roy',
+        requestedAllocation: 100,
+        assignments: ananyaAssignments,
+        editingAssignmentId: 'asgn-105',
+        status: 'Ending Soon',
+        assignedFrom: '2025-01-01',
+        assignedTo: '2025-10-31',
+      });
+
+      expect(res100.valid).toBe(true);
+      expect(res100.currentActiveAllocation).toBe(0); // asgn-105 excluded
+      expect(res100.proposedTotal).toBe(100);
+
+      // 2. Edit asgn-105 and change 100% to 50%
+      const res50 = validateEmployeeAllocation({
+        employeeId: 'PS-034',
+        employeeName: 'Ananya Roy',
+        requestedAllocation: 50,
+        assignments: ananyaAssignments,
+        editingAssignmentId: 'asgn-105',
+        status: 'Ending Soon',
+        assignedFrom: '2025-01-01',
+        assignedTo: '2025-10-31',
+      });
+
+      expect(res50.valid).toBe(true);
+      expect(res50.currentActiveAllocation).toBe(0); // asgn-105 excluded
+      expect(res50.requestedAllocation).toBe(50);
+      expect(res50.proposedTotal).toBe(50);
+    });
+
+    it('ANANYA ROY OVER-ALLOCATION REGRESSION: rejects edit if Ananya Roy (PS-034) ALREADY has another active overlapping assignment', () => {
+      const ananyaDualAssignments: EmployeeAssignment[] = [
+        {
+          id: 'asgn-105',
+          employeeId: 'PS-034',
+          employeeName: 'Ananya Roy',
+          designation: 'HR Onboarding Specialist',
+          projectId: 'proj-hdfc-01',
+          projectName: 'HDFC Bank Core Cloud Migration',
+          assignedFrom: '2025-01-01',
+          assignedTo: '2025-10-31',
+          allocationPercentage: 100,
+          status: 'Ending Soon',
+        },
+        {
+          id: 'asgn-200-other',
+          employeeId: 'PS-034',
+          employeeName: 'Ananya Roy',
+          designation: 'HR Specialist',
+          projectId: 'proj-infy-02',
+          projectName: 'Infosys Finacle AI',
+          assignedFrom: '2025-01-01',
+          assignedTo: '2025-10-31',
+          allocationPercentage: 60,
+          status: 'Active',
+        },
+      ];
+
+      // Edit asgn-105 and request 50%: asgn-105 is excluded (0%), but asgn-200-other is included (60%) -> proposed total = 110%
+      const resOver = validateEmployeeAllocation({
+        employeeId: 'PS-034',
+        employeeName: 'Ananya Roy',
+        requestedAllocation: 50,
+        assignments: ananyaDualAssignments,
+        editingAssignmentId: 'asgn-105',
+        status: 'Ending Soon',
+        assignedFrom: '2025-01-01',
+        assignedTo: '2025-10-31',
+      });
+
+      expect(resOver.valid).toBe(false);
+      expect(resOver.currentActiveAllocation).toBe(60);
+      expect(resOver.requestedAllocation).toBe(50);
+      expect(resOver.proposedTotal).toBe(110);
+      expect(resOver.error).toContain('cannot exceed 100%');
     });
 
     it('allows non-overlapping date assignments even if total allocation exceeds 100% across different periods', () => {

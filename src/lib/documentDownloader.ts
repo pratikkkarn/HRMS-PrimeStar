@@ -318,6 +318,13 @@ export const buildJsPdfDocument = (options: DownloadDocOptions): jsPDF => {
       doc.text(`Billing Period: ${formatDate(options.invoice.billingPeriodStart)} to ${formatDate(options.invoice.billingPeriodEnd)}`, 14, y);
       y += 6;
     }
+    const invEmpNames = options.invoice?.employeeNames && options.invoice.employeeNames.length > 0
+      ? options.invoice.employeeNames.join(', ')
+      : options.invoice?.employeeName;
+    if (invEmpNames) {
+      doc.text(`Assigned Employee(s): ${invEmpNames}`, 14, y);
+      y += 6;
+    }
     y += 4;
 
     doc.setFillColor(241, 245, 249);

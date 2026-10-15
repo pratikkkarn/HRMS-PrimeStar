@@ -39,7 +39,13 @@ export function AppContent() {
   const { switchRole } = useRole();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [navigationParams, setNavigationParams] = useState<any>(null);
   const [candidateToken, setCandidateToken] = useState<string | null>(null);
+
+  const handleNavigate = (tab: string, params?: any) => {
+    setCurrentTab(tab);
+    setNavigationParams(params || null);
+  };
 
   useEffect(() => {
     // Check URL search params for candidate token
@@ -79,9 +85,9 @@ export function AppContent() {
   // 2. EMPLOYEE PORTAL ROUTE GROUP
   if (currentTab.startsWith('portal')) {
     return (
-      <PortalLayout currentTab={currentTab} onNavigate={setCurrentTab}>
+      <PortalLayout currentTab={currentTab} onNavigate={handleNavigate}>
         {currentTab === 'portal' || currentTab === 'portal-dashboard' ? (
-          <PortalDashboard onNavigate={setCurrentTab} />
+          <PortalDashboard onNavigate={handleNavigate} />
         ) : currentTab === 'portal-profile' ? (
           <PortalProfile />
         ) : currentTab === 'portal-payslips' ? (
@@ -91,7 +97,7 @@ export function AppContent() {
         ) : currentTab === 'portal-timesheets' ? (
           <PortalTimesheets />
         ) : (
-          <PortalDashboard onNavigate={setCurrentTab} />
+          <PortalDashboard onNavigate={handleNavigate} />
         )}
       </PortalLayout>
     );
@@ -101,24 +107,53 @@ export function AppContent() {
   return (
     <AdminLayout
       currentTab={currentTab}
-      onNavigate={setCurrentTab}
+      onNavigate={handleNavigate}
       onSignOut={handleSignOut}
     >
-      {currentTab === 'dashboard' && <AdminDashboardView onNavigate={setCurrentTab} />}
-      {currentTab === 'po-tracker' && <POTrackerMain onNavigate={setCurrentTab} />}
-      {currentTab === 'projects' && <ProjectsView />}
+      {currentTab === 'dashboard' && <AdminDashboardView onNavigate={handleNavigate} />}
+      {currentTab === 'po-tracker' && (
+        <POTrackerMain
+          onNavigate={handleNavigate}
+          initialStatusFilter={navigationParams?.statusFilter}
+          initialProjectFilter={navigationParams?.projectFilter}
+          selectedPoId={navigationParams?.poId}
+        />
+      )}
+      {currentTab === 'projects' && (
+        <ProjectsView
+          onNavigate={handleNavigate}
+          initialStatusFilter={navigationParams?.statusFilter}
+        />
+      )}
       {currentTab === 'invoices' && <InvoicesView />}
-      {currentTab === 'documents' && <DocumentsView />}
+      {currentTab === 'documents' && (
+        <DocumentsView
+          onNavigate={handleNavigate}
+          initialTypeFilter={navigationParams?.typeFilter}
+          initialStatusFilter={navigationParams?.statusFilter}
+        />
+      )}
       {currentTab === 'assignments' && <AssignmentsView />}
-      {currentTab === 'onboarding' && <OnboardingDashboard />}
-      {currentTab === 'joining-pipeline' && <OnboardingDashboard />}
+      {currentTab === 'onboarding' && (
+        <OnboardingDashboard
+          onNavigate={handleNavigate}
+          initialStatusFilter={navigationParams?.statusFilter}
+        />
+      )}
+      {currentTab === 'joining-pipeline' && (
+        <OnboardingDashboard
+          onNavigate={handleNavigate}
+          initialTab="joining-pipeline"
+          initialStatusFilter={navigationParams?.statusFilter}
+        />
+      )}
       {currentTab === 'profile-requests' && <ProfileRequestsView />}
       {currentTab === 'employees' && <EmployeesView />}
       {currentTab === 'salary-structures' && <SalaryStructuresView />}
       {currentTab === 'timesheets' && <TimesheetAdminView />}
-      {currentTab === 'reports' && <ReportsView />}
+      {currentTab === 'reports' && <ReportsView onNavigate={handleNavigate} />}
       {currentTab === 'profile' && <ProfileAccountView />}
-      {currentTab === 'notifications' && <AdminDashboardView onNavigate={setCurrentTab} />}
+      {currentTab === 'notifications' && <AdminDashboardView onNavigate={handleNavigate} />}
       {currentTab === 'settings' && <SettingsView />}
     </AdminLayout>
   );

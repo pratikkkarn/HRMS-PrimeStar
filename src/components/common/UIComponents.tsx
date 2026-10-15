@@ -98,12 +98,14 @@ export const Badge: React.FC<BadgeProps> = ({ status, className, children }) => 
 };
 
 // --- CARD ---
-export const Card: React.FC<{ children: ReactNode; className?: string }> = ({
+export const Card: React.FC<{ children: ReactNode; className?: string; onClick?: () => void }> = ({
   children,
   className,
+  onClick,
 }) => {
   return (
     <div
+      onClick={onClick}
       className={cn(
         'bg-white rounded-xl border border-slate-200/80 shadow-xs p-5 transition-all',
         className

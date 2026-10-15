@@ -321,11 +321,11 @@ export const AssignmentsView: React.FC = () => {
   const handleEmployeeChange = (empId: string) => {
     setFormEmployeeId(empId);
     const selectedEmp = employees.find((e) => e.employeeId === empId);
-    if (selectedEmp && !editingAssignment) {
+    if (selectedEmp) {
       setFormDesignation(selectedEmp.designation);
     }
 
-    // Auto-sync target project for selected employee if single or multiple existing projects exist
+    // Auto-sync target project for selected employee
     const projResolution = getTargetProjectForEmployee({
       employeeId: empId,
       assignments,
@@ -333,6 +333,7 @@ export const AssignmentsView: React.FC = () => {
       defaultProjectId: projects[0]?.id || '',
       employees,
       projects,
+      editingAssignmentId: editingAssignment?.id,
     });
 
     setFormProjectId(projResolution.projectId);
@@ -468,7 +469,20 @@ export const AssignmentsView: React.FC = () => {
         prev.map((a) => (a.id === editingAssignment.id ? updatedRecord : a))
       );
 
-      // Synchronize PO tag
+      // If employee changed during edit, unassign previous employee from old PO if no other active assignment remains on that PO
+      if (editingAssignment.employeeId !== formEmployeeId && editingAssignment.poId) {
+        const oldEmpHasOtherAssignmentOnPo = assignments.some(
+          (a) =>
+            a.id !== editingAssignment.id &&
+            a.employeeId === editingAssignment.employeeId &&
+            a.poId === editingAssignment.poId
+        );
+        if (!oldEmpHasOtherAssignmentOnPo) {
+          unassignEmployeeFromPO(editingAssignment.poId, editingAssignment.employeeId);
+        }
+      }
+
+      // Synchronize PO tag for new employee
       if (targetPo) {
         assignEmployeeToPO(targetPo.id, {
           employeeId: formEmployeeId,

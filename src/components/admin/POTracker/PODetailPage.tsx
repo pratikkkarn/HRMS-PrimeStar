@@ -98,10 +98,26 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
             )}
           </div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight font-mono">{po.poNumber}</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Project: <strong className="text-slate-800 font-semibold">{po.projectName}</strong> ·
-            Requester: {po.poRequester}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-500">
+            <span>Project: <strong className="text-slate-800 font-semibold">{po.projectName}</strong></span>
+            <span>·</span>
+            <span>PO Requester: <strong className="text-slate-800 font-semibold">{po.poRequester}</strong></span>
+            <span>·</span>
+            <div className="flex items-center gap-1">
+              <span className="font-medium text-slate-600">Assigned Workforce:</span>
+              {po.assignedEmployees && po.assignedEmployees.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {po.assignedEmployees.map((e) => (
+                    <span key={e.employeeId} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold text-[10px]">
+                      {e.employeeName} ({e.employeeId})
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-slate-400 italic">None tagged</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ACTION BUTTONS */}
@@ -276,7 +292,21 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
               </div>
               <div>
                 <span className="text-slate-500 block">PO Requester</span>
-                <span className="font-medium text-slate-800">{po.poRequester}</span>
+                <span className="font-semibold text-slate-800">{po.poRequester}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Assigned Workforce</span>
+                {po.assignedEmployees && po.assignedEmployees.length > 0 ? (
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {po.assignedEmployees.map((e) => (
+                      <span key={e.employeeId} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-semibold">
+                        {e.employeeName} ({e.employeeId})
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="font-medium text-slate-400 italic">No employees tagged</span>
+                )}
               </div>
               <div>
                 <span className="text-slate-500 block">GST Rate Applied</span>
@@ -560,6 +590,7 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                   <tr>
                     <th className="p-3">Invoice / Credit Note No.</th>
                     <th className="p-3">Type</th>
+                    <th className="p-3">Assigned Employee(s)</th>
                     <th className="p-3">Dates (Issue / Due)</th>
                     <th className="p-3">Billing Period</th>
                     <th className="p-3 text-right">Excl. GST</th>
@@ -572,7 +603,7 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                 <tbody className="divide-y divide-slate-100">
                   {po.invoices.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400">
+                      <td colSpan={10} className="p-8 text-center text-slate-400">
                         No invoices or credit notes issued yet for this PO.
                       </td>
                     </tr>
@@ -596,6 +627,23 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                             <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                               Tax Invoice
                             </span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          {inv.employeeNames && inv.employeeNames.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {inv.employeeNames.map((name) => (
+                                <span key={name} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold text-[10px]">
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          ) : inv.employeeName ? (
+                            <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold text-[10px]">
+                              {inv.employeeName}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">—</span>
                           )}
                         </td>
                         <td className="p-3 text-slate-600">

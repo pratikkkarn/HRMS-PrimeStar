@@ -33,6 +33,7 @@ export const InvoicesView: React.FC = () => {
                 <th className="p-3">Invoice / Credit Note No.</th>
                 <th className="p-3">PO Number & Project</th>
                 <th className="p-3">Type</th>
+                <th className="p-3">Assigned Employee(s)</th>
                 <th className="p-3">Invoice Date</th>
                 <th className="p-3 text-right">Amount (Excl. GST)</th>
                 <th className="p-3 text-right">GST (18%)</th>
@@ -43,7 +44,7 @@ export const InvoicesView: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {allInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400">
+                  <td colSpan={9} className="p-8 text-center text-slate-400">
                     No invoice records registered.
                   </td>
                 </tr>
@@ -64,6 +65,23 @@ export const InvoicesView: React.FC = () => {
                         <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[10px]">
                           Invoice
                         </span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      {inv.employeeNames && inv.employeeNames.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {inv.employeeNames.map((name) => (
+                            <span key={name} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold text-[10px]">
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : inv.employeeName ? (
+                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold text-[10px]">
+                          {inv.employeeName}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">—</span>
                       )}
                     </td>
                     <td className="p-3 text-slate-600">{formatDate(inv.invoiceDate)}</td>

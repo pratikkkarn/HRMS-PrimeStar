@@ -4,7 +4,11 @@ import { Card, Button } from '../../common/UIComponents';
 import { formatINR, formatINRCompact } from '../../../lib/utils';
 import { BarChart3, Download, FileSpreadsheet } from 'lucide-react';
 
-export const ReportsView: React.FC = () => {
+interface ReportsViewProps {
+  onNavigate?: (tab: string, params?: any) => void;
+}
+
+export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigate }) => {
   const { purchaseOrders, projects, employees, candidates } = useData();
 
   const totalPOValue = purchaseOrders.reduce((s, p) => s + p.amountExclGst, 0);
@@ -45,15 +49,24 @@ export const ReportsView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4 space-y-2">
+        <Card
+          onClick={() => onNavigate?.('po-tracker', { statusFilter: 'ALL' })}
+          className="p-4 space-y-2 cursor-pointer hover:shadow-md hover:border-slate-300 transition-all"
+        >
           <span className="text-slate-500 text-[11px] font-semibold uppercase">Gross PO Portfolio Value</span>
           <div className="text-2xl font-bold font-mono text-slate-900">{formatINR(totalPOValue)}</div>
         </Card>
-        <Card className="p-4 space-y-2">
+        <Card
+          onClick={() => onNavigate?.('invoices')}
+          className="p-4 space-y-2 cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all"
+        >
           <span className="text-slate-500 text-[11px] font-semibold uppercase">Total Invoiced & Collected</span>
           <div className="text-2xl font-bold font-mono text-emerald-700">{formatINR(totalInvoiced)}</div>
         </Card>
-        <Card className="p-4 space-y-2">
+        <Card
+          onClick={() => onNavigate?.('po-tracker', { statusFilter: 'ALL' })}
+          className="p-4 space-y-2 cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all"
+        >
           <span className="text-slate-500 text-[11px] font-semibold uppercase">Total Unbilled Balance Available</span>
           <div className="text-2xl font-bold font-mono text-indigo-700">{formatINR(totalUnbilled)}</div>
         </Card>
@@ -81,7 +94,11 @@ export const ReportsView: React.FC = () => {
               const utilPct = val > 0 ? ((inv / val) * 100).toFixed(1) : '0.0';
 
               return (
-                <tr key={p.id} className="hover:bg-slate-50">
+                <tr
+                  key={p.id}
+                  onClick={() => onNavigate?.('po-tracker', { projectFilter: p.id })}
+                  className="hover:bg-slate-50 cursor-pointer transition-colors"
+                >
                   <td className="p-3 font-semibold text-slate-900">{p.name}</td>
                   <td className="p-3 text-slate-600">{p.clientName}</td>
                   <td className="p-3 text-right font-mono font-medium text-slate-900 tabular-nums">{formatINR(val)}</td>

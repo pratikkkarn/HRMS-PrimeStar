@@ -4,7 +4,8 @@ import { Modal, Input, Button } from '../../common/UIComponents';
 import { PurchaseOrder } from '../../../types/domain';
 import { formatINR } from '../../../lib/utils';
 import { validateNewCreditNoteAmount } from '../../../lib/poUtils';
-import { FileText, AlertCircle, Upload, CheckCircle2 } from 'lucide-react';
+import { FileText, AlertCircle, Upload, CheckCircle2, X, Users } from 'lucide-react';
+import { SearchableEmployeeSelector } from '../../common/SearchableEmployeeSelector';
 
 interface POInvoiceModalProps {
   po: PurchaseOrder;
@@ -13,7 +14,7 @@ interface POInvoiceModalProps {
 }
 
 export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onClose }) => {
-  const { addInvoice } = useData();
+  const { addInvoice, employees } = useData();
 
   const todayStr = new Date().toISOString().split('T')[0];
   const defaultDueDateStr = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -43,6 +44,9 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
     `${todayStr.slice(0, 7)}-01`
   );
   const [billingPeriodEnd, setBillingPeriodEnd] = useState(todayStr);
+
+  // Assigned Employees State
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
 
   // Financial Defaults (Defaulting strictly to 0)
   const [amountExclGst, setAmountExclGst] = useState<number>(0);
@@ -129,6 +133,14 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
       ? attachedFile.name
       : `${invoiceNumber.replace(/\//g, '_')}.pdf`;
 
+    const selectedEmployeeNames = selectedEmployeeIds
+      .map((id) => {
+        const emp = employees.find((e) => e.employeeId === id) ||
+          po.assignedEmployees.find((e) => e.employeeId === id);
+        return emp ? ('name' in emp ? emp.name : emp.employeeName) : id;
+      })
+      .filter(Boolean);
+
     addInvoice(po.id, {
       invoiceNumber: invoiceNumber.trim(),
       invoiceDate,
@@ -145,6 +157,10 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
       notes: notes.trim(),
       documentName: docName,
       fileData: attachedFile || undefined,
+      employeeIds: selectedEmployeeIds,
+      employeeNames: selectedEmployeeNames,
+      employeeId: selectedEmployeeIds[0] || undefined,
+      employeeName: selectedEmployeeNames[0] || undefined,
     });
 
     onClose();
@@ -271,6 +287,25 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
             value={billingPeriodEnd}
             onChange={(e) => setBillingPeriodEnd(e.target.value)}
             required
+          />
+        </div>
+
+        {/* ASSIGNED EMPLOYEE(S) SELECTOR */}
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+          <label className="block font-semibold text-slate-800 text-xs">
+            Assigned Employee(s) <span className="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <p className="text-[11px] text-slate-500">
+            Specify the employee(s) attributed to this {isCreditNote ? 'credit note' : 'invoice'}. You can browse the list or search by name or ID.
+          </p>
+
+          <SearchableEmployeeSelector
+            allEmployees={employees}
+            poEmployees={po.assignedEmployees}
+            selectedEmployeeIds={selectedEmployeeIds}
+            onChange={setSelectedEmployeeIds}
+            placeholder={`-- Select or Search Employee for ${isCreditNote ? 'Credit Note' : 'Invoice'} --`}
+            isCreditNote={isCreditNote}
           />
         </div>
 

@@ -19,11 +19,22 @@ import {
   UserCheck,
 } from 'lucide-react';
 
-export const ProjectsView: React.FC = () => {
+interface ProjectsViewProps {
+  onNavigate?: (tab: string, params?: any) => void;
+  initialStatusFilter?: string;
+}
+
+export const ProjectsView: React.FC<ProjectsViewProps> = ({ onNavigate, initialStatusFilter }) => {
   const { projects, purchaseOrders, employees, addProject } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter || 'All');
+
+  React.useEffect(() => {
+    if (initialStatusFilter) {
+      setStatusFilter(initialStatusFilter);
+    }
+  }, [initialStatusFilter]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
@@ -165,30 +176,43 @@ export const ProjectsView: React.FC = () => {
           value={projectStats.totalProjects}
           subtitle="All registered projects"
           icon={<Briefcase className="w-4 h-4 text-blue-600" />}
+          onClick={() => {
+            setSearchQuery('');
+            setStatusFilter('All');
+          }}
+          className={statusFilter === 'All' ? 'ring-2 ring-blue-500/20 bg-blue-50/20' : ''}
         />
         <StatCard
           title="Active Projects"
           value={projectStats.activeProjects}
           subtitle="Currently ongoing"
           icon={<CheckCircle className="w-4 h-4 text-emerald-600" />}
+          onClick={() => {
+            setSearchQuery('');
+            setStatusFilter('Active');
+          }}
+          className={statusFilter === 'Active' ? 'ring-2 ring-emerald-500/20 bg-emerald-50/20' : ''}
         />
         <StatCard
           title="Total POs"
           value={projectStats.totalPOs}
           subtitle="Linked purchase orders"
           icon={<FileText className="w-4 h-4 text-purple-600" />}
+          onClick={() => onNavigate?.('po-tracker', { statusFilter: 'ALL' })}
         />
         <StatCard
           title="Total PO Value"
           value={formatINRCompact(projectStats.totalPOValue)}
           subtitle="Total committed amount"
           icon={<DollarSign className="w-4 h-4 text-amber-600" />}
+          onClick={() => onNavigate?.('po-tracker', { statusFilter: 'ALL' })}
         />
         <StatCard
           title="Remaining Balance"
           value={formatINRCompact(projectStats.remainingBalance)}
           subtitle="Unbilled balance"
           icon={<Wallet className="w-4 h-4 text-indigo-600" />}
+          onClick={() => onNavigate?.('po-tracker', { statusFilter: 'ALL' })}
         />
       </div>
 

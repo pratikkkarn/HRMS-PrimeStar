@@ -57,14 +57,36 @@ export interface DocumentRecord {
   fileSizeBytes?: number;
 }
 
-export const DocumentsView: React.FC = () => {
+interface DocumentsViewProps {
+  onNavigate?: (tab: string, params?: any) => void;
+  initialTypeFilter?: string;
+  initialStatusFilter?: string;
+}
+
+export const DocumentsView: React.FC<DocumentsViewProps> = ({
+  onNavigate,
+  initialTypeFilter,
+  initialStatusFilter,
+}) => {
   const { purchaseOrders, sows, quotations, projects, candidates } = useData();
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('All');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>(initialTypeFilter || 'All');
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('All');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('All');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>(initialStatusFilter || 'All');
+
+  React.useEffect(() => {
+    if (initialTypeFilter) {
+      setSelectedTypeFilter(initialTypeFilter);
+    }
+  }, [initialTypeFilter]);
+
+  React.useEffect(() => {
+    if (initialStatusFilter) {
+      setSelectedStatusFilter(initialStatusFilter);
+    }
+  }, [initialStatusFilter]);
 
   // Custom Uploaded Documents & Deleted Document Tracking
   const [customDocs, setCustomDocs] = useState<DocumentRecord[]>(() => {
@@ -443,7 +465,14 @@ export const DocumentsView: React.FC = () => {
       {/* SUMMARY CARDS METRICS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Documents */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div
+          onClick={() => {
+            setSelectedTypeFilter('All');
+            setSelectedStatusFilter('All');
+            setSearchQuery('');
+          }}
+          className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+        >
           <div>
             <span className="text-xs font-medium text-slate-500">Total Documents</span>
             <div className="text-2xl font-black text-slate-900 mt-1">{totalCount}</div>
@@ -457,7 +486,13 @@ export const DocumentsView: React.FC = () => {
         </div>
 
         {/* Contracts & SOWs */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div
+          onClick={() => {
+            setSelectedTypeFilter('SOW / Contract');
+            setSelectedStatusFilter('All');
+          }}
+          className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all"
+        >
           <div>
             <span className="text-xs font-medium text-slate-500">Contracts & SOWs</span>
             <div className="text-2xl font-black text-indigo-900 mt-1">{contractsCount}</div>
@@ -471,7 +506,13 @@ export const DocumentsView: React.FC = () => {
         </div>
 
         {/* Invoices & Credit Notes */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div
+          onClick={() => {
+            setSelectedTypeFilter('Tax Invoice');
+            setSelectedStatusFilter('All');
+          }}
+          className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all"
+        >
           <div>
             <span className="text-xs font-medium text-slate-500">Tax Invoices</span>
             <div className="text-2xl font-black text-emerald-900 mt-1">{invoicesCount}</div>
@@ -485,7 +526,12 @@ export const DocumentsView: React.FC = () => {
         </div>
 
         {/* Expiring Documents */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div
+          onClick={() => {
+            setSelectedStatusFilter('Expired / Superseded');
+          }}
+          className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between cursor-pointer hover:shadow-md hover:border-amber-300 transition-all"
+        >
           <div>
             <span className="text-xs font-medium text-slate-500">Expiring Documents</span>
             <div className="text-2xl font-black text-amber-900 mt-1">{expiringCount}</div>

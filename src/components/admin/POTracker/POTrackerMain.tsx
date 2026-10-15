@@ -28,10 +28,17 @@ import { PurchaseOrder } from '../../../types/domain';
 
 interface POTrackerMainProps {
   selectedPoId?: string;
-  onNavigate?: (tab: string) => void;
+  initialStatusFilter?: string;
+  initialProjectFilter?: string;
+  onNavigate?: (tab: string, params?: any) => void;
 }
 
-export const POTrackerMain: React.FC<POTrackerMainProps> = ({ selectedPoId, onNavigate }) => {
+export const POTrackerMain: React.FC<POTrackerMainProps> = ({
+  selectedPoId,
+  initialStatusFilter,
+  initialProjectFilter,
+  onNavigate,
+}) => {
   const { purchaseOrders, projects, updatePO, deletePO } = useData();
   const { permissions, currentUser } = useRole();
 
@@ -52,9 +59,27 @@ export const POTrackerMain: React.FC<POTrackerMainProps> = ({ selectedPoId, onNa
 
   // Search & Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [projectFilter, setProjectFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [projectFilter, setProjectFilter] = useState<string>(initialProjectFilter || 'ALL');
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'ALL');
   const [expiryFilter, setExpiryFilter] = useState<string>('ALL');
+
+  React.useEffect(() => {
+    if (initialStatusFilter) {
+      setStatusFilter(initialStatusFilter);
+    }
+  }, [initialStatusFilter]);
+
+  React.useEffect(() => {
+    if (initialProjectFilter) {
+      setProjectFilter(initialProjectFilter);
+    }
+  }, [initialProjectFilter]);
+
+  React.useEffect(() => {
+    if (selectedPoId) {
+      setActivePoId(selectedPoId);
+    }
+  }, [selectedPoId]);
 
   // Dynamic Summary Metrics
   const summary = useMemo(() => {
@@ -172,43 +197,62 @@ export const POTrackerMain: React.FC<POTrackerMainProps> = ({ selectedPoId, onNa
         )}
       </div>
 
-      {/* 2. SUMMARY CARDS (ALL INITIALIZED TO ZERO) */}
+      {/* 2. SUMMARY CARDS */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard
           title="Total POs"
           value={summary.totalPOs}
           subtitle="Registered orders"
           icon={<FileText className="w-4 h-4 text-blue-600" />}
+          onClick={() => resetFilters()}
+          className={statusFilter === 'ALL' && projectFilter === 'ALL' && expiryFilter === 'ALL' ? 'ring-2 ring-blue-500/20 bg-blue-50/20' : ''}
         />
         <StatCard
           title="Active POs"
           value={summary.activePOs}
           subtitle="Nominal status"
           icon={<CheckCircle className="w-4 h-4 text-emerald-600" />}
+          onClick={() => {
+            resetFilters();
+            setStatusFilter('Active');
+          }}
+          className={statusFilter === 'Active' ? 'ring-2 ring-emerald-500/20 bg-emerald-50/20' : ''}
         />
         <StatCard
           title="Expiring Soon"
           value={summary.expiringSoon}
           subtitle="Within 60 days"
           icon={<Clock className="w-4 h-4 text-amber-600" />}
+          onClick={() => {
+            resetFilters();
+            setStatusFilter('Expiring Soon');
+          }}
+          className={statusFilter === 'Expiring Soon' ? 'ring-2 ring-amber-500/20 bg-amber-50/20' : ''}
         />
         <StatCard
           title="Low Balance"
           value={summary.lowBalance}
           subtitle="< 15% remaining"
           icon={<AlertTriangle className="w-4 h-4 text-red-600" />}
+          onClick={() => {
+            resetFilters();
+            setStatusFilter('Low Balance');
+          }}
+          className={statusFilter === 'Low Balance' ? 'ring-2 ring-red-500/20 bg-red-50/20' : ''}
         />
         <StatCard
           title="Total PO Value"
           value={formatINRCompact(summary.totalPOValue)}
           subtitle="Committed amount"
           icon={<DollarSign className="w-4 h-4 text-purple-600" />}
+          onClick={() => resetFilters()}
         />
         <StatCard
           title="Remaining Balance"
           value={formatINRCompact(summary.remainingBalance)}
           subtitle="Available for billing"
           icon={<Briefcase className="w-4 h-4 text-indigo-600" />}
+          onClick={() => resetFilters()}
         />
       </div>
 

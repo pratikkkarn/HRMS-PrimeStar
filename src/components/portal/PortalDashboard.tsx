@@ -55,24 +55,28 @@ export const PortalDashboard: React.FC<{ onNavigate: (tab: string) => void }> = 
           value={employee.employeeId}
           subtitle={`Joined ${formatDate(employee.joiningDate)}`}
           icon={<User className="w-4 h-4 text-indigo-600" />}
+          onClick={() => onNavigate('portal-profile')}
         />
         <StatCard
           title="Monthly Net Take-Home"
           value={formatINR(employee.salaryStructure.netTakeHomeMonthly)}
           subtitle="Direct Bank Deposit"
           icon={<FileText className="w-4 h-4 text-emerald-600" />}
+          onClick={() => onNavigate('portal-salary')}
         />
         <StatCard
           title="Assigned Project"
           value={employee.projectName.split(' ')[0]}
           subtitle={`Manager: ${employee.managerName}`}
           icon={<Briefcase className="w-4 h-4 text-indigo-600" />}
+          onClick={() => onNavigate('portal-profile')}
         />
         <StatCard
           title="Current Timesheet Status"
           value={latestTimesheet?.status || 'Draft'}
           subtitle={`Week ending ${latestTimesheet?.periodEndDate || 'Oct 19'}`}
           icon={<Clock className="w-4 h-4 text-amber-600" />}
+          onClick={() => onNavigate('portal-timesheets')}
         />
       </div>
 
