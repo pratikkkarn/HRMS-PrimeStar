@@ -69,6 +69,23 @@ export interface Quotation {
   status: 'Approved' | 'Pending' | 'Rejected';
 }
 
+export interface InvoiceEmployeeContribution {
+  employeeId: string;
+  employeeName: string;
+  designation?: string;
+  assignmentId?: string;
+  monthlyBillingRate: number;
+  allocationPercentage?: number;
+  assignedFrom?: string;
+  assignedTo?: string;
+  eligibleDaysWorked: number;
+  totalDaysInMonth: number;
+  calculatedAmount: number;
+  attributedAmount: number;
+  isOverridden?: boolean;
+  overrideReason?: string;
+}
+
 export interface Invoice {
   id: string;
   poId: string;
@@ -94,6 +111,7 @@ export interface Invoice {
   employeeNames?: string[];
   employeeId?: string;
   employeeName?: string;
+  employeeContributions?: InvoiceEmployeeContribution[];
 }
 
 export type AssignmentStatus = 'Active' | 'Ending Soon' | 'Completed' | 'On Hold' | 'Terminated' | 'Unassigned';
