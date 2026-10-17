@@ -33,15 +33,51 @@ import { TerminateAssignmentModal } from '../Assignments/TerminateAssignmentModa
 interface PODetailPageProps {
   po: PurchaseOrder;
   onBack: () => void;
+  highlightEmployeeId?: string;
+  initialTab?: string;
+  onNavigate?: (tab: string, params?: any) => void;
 }
 
-export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
+export const PODetailPage: React.FC<PODetailPageProps> = ({
+  po,
+  onBack,
+  highlightEmployeeId,
+  initialTab,
+  onNavigate,
+}) => {
   const { cancelInvoice, updateInvoiceStatus, unassignEmployeeFromPO } = useData();
   const { permissions } = useRole();
 
   const [activeTab, setActiveTab] = useState<
     'overview' | 'documents' | 'invoices' | 'employees' | 'renewal' | 'audit'
-  >('overview');
+  >((initialTab as any) || 'overview');
+  const [highlightedEmpId, setHighlightedEmpId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab as any);
+    }
+    if (highlightEmployeeId) {
+      setActiveTab('employees');
+      setHighlightedEmpId(highlightEmployeeId);
+
+      const scrollTimer = setTimeout(() => {
+        const el = document.getElementById(`po-emp-row-${highlightEmployeeId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+
+      const clearTimer = setTimeout(() => {
+        setHighlightedEmpId(null);
+      }, 2500);
+
+      return () => {
+        clearTimeout(scrollTimer);
+        clearTimeout(clearTimer);
+      };
+    }
+  }, [highlightEmployeeId, initialTab]);
 
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [renewalModalOpen, setRenewalModalOpen] = useState(false);
@@ -813,7 +849,15 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                         : 'Calendar Days';
 
                     return (
-                      <tr key={emp.employeeId} className="hover:bg-slate-50">
+                      <tr
+                        key={emp.employeeId}
+                        id={`po-emp-row-${emp.employeeId}`}
+                        className={`transition-all duration-500 ${
+                          highlightedEmpId === emp.employeeId
+                            ? 'bg-purple-100/90 ring-2 ring-purple-500 border-purple-400 font-medium animate-pulse shadow-sm'
+                            : 'hover:bg-slate-50'
+                        }`}
+                      >
                         <td className="p-3 font-semibold text-slate-900">{emp.employeeName}</td>
                         <td className="p-3 font-mono text-slate-600">{emp.employeeId}</td>
                         <td className="p-3 text-slate-600">{emp.designation}</td>
@@ -841,6 +885,22 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                if (onNavigate) {
+                                  onNavigate('proforma-invoices', {
+                                    poId: po.id,
+                                    highlightEmployeeId: emp.employeeId,
+                                  });
+                                }
+                              }}
+                              className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold cursor-pointer flex items-center gap-1 bg-indigo-50/80 hover:bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200 transition-colors"
+                              title="View Proformas for this employee"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>View Proformas</span>
+                            </button>
+
                             {permissions.canAssignEmployeesToPO && (
                               <>
                                 <button

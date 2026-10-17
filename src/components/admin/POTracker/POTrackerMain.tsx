@@ -31,6 +31,8 @@ interface POTrackerMainProps {
   initialStatusFilter?: string;
   initialProjectFilter?: string;
   onNavigate?: (tab: string, params?: any) => void;
+  highlightEmployeeId?: string;
+  initialTab?: string;
 }
 
 export const POTrackerMain: React.FC<POTrackerMainProps> = ({
@@ -38,6 +40,8 @@ export const POTrackerMain: React.FC<POTrackerMainProps> = ({
   initialStatusFilter,
   initialProjectFilter,
   onNavigate,
+  highlightEmployeeId,
+  initialTab,
 }) => {
   const { purchaseOrders, projects, updatePO, deletePO } = useData();
   const { permissions, currentUser } = useRole();
@@ -170,7 +174,15 @@ export const POTrackerMain: React.FC<POTrackerMainProps> = ({
   // If viewing a single PO detail page
   const currentViewingPO = purchaseOrders.find((p) => p.id === activePoId);
   if (currentViewingPO) {
-    return <PODetailPage po={currentViewingPO} onBack={() => setActivePoId(null)} />;
+    return (
+      <PODetailPage
+        po={currentViewingPO}
+        onBack={() => setActivePoId(null)}
+        highlightEmployeeId={highlightEmployeeId}
+        initialTab={initialTab}
+        onNavigate={onNavigate}
+      />
+    );
   }
 
   const canManage = permissions.canManagePOs || currentUser.role === 'CEO';

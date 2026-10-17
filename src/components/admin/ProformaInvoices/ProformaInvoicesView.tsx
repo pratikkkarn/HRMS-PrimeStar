@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../../../context/DataContext';
 import { useRole } from '../../../context/RoleContext';
+import { useNotification } from '../../../context/NotificationContext';
 import { Card, Button, Badge } from '../../common/UIComponents';
 import { formatINR, formatDate } from '../../../lib/utils';
 import { PurchaseOrder, AssignedEmployee, ProformaInvoice } from '../../../types/domain';
@@ -25,21 +26,65 @@ import {
   Send,
   AlertCircle,
   Mail,
+  Briefcase,
 } from 'lucide-react';
 import { CreateEditProformaModal } from './CreateEditProformaModal';
 import { ProformaPreviewModal } from './ProformaPreviewModal';
 import { ProformaShareModal } from './ProformaShareModal';
 
-export const ProformaInvoicesView: React.FC = () => {
+interface ProformaInvoicesViewProps {
+  initialPoId?: string;
+  highlightEmployeeId?: string;
+  onNavigate?: (tab: string, params?: any) => void;
+}
+
+export const ProformaInvoicesView: React.FC<ProformaInvoicesViewProps> = ({
+  initialPoId,
+  highlightEmployeeId,
+  onNavigate,
+}) => {
   const { purchaseOrders, employees, proformaInvoices, deleteProformaInvoice } = useData();
   const { permissions } = useRole();
+  const { showToast } = useNotification();
 
   // Selected PO filter
-  const [selectedPoId, setSelectedPoId] = useState<string>(
-    purchaseOrders[0]?.id || ''
-  );
+  const [selectedPoId, setSelectedPoId] = useState<string>(() => {
+    if (initialPoId && purchaseOrders.some((p) => p.id === initialPoId)) {
+      return initialPoId;
+    }
+    return purchaseOrders[0]?.id || '';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedEmployeeIds, setExpandedEmployeeIds] = useState<Record<string, boolean>>({});
+  const [highlightedEmpId, setHighlightedEmpId] = useState<string | null>(null);
+
+  // Sync props for navigation focus
+  useEffect(() => {
+    if (initialPoId && purchaseOrders.some((p) => p.id === initialPoId)) {
+      setSelectedPoId(initialPoId);
+    }
+
+    if (highlightEmployeeId) {
+      setExpandedEmployeeIds((prev) => ({ ...prev, [highlightEmployeeId]: true }));
+      setHighlightedEmpId(highlightEmployeeId);
+
+      const scrollTimer = setTimeout(() => {
+        const el = document.getElementById(`prof-emp-row-${highlightEmployeeId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+
+      const clearTimer = setTimeout(() => {
+        setHighlightedEmpId(null);
+      }, 2500);
+
+      return () => {
+        clearTimeout(scrollTimer);
+        clearTimeout(clearTimer);
+      };
+    }
+  }, [initialPoId, highlightEmployeeId, purchaseOrders]);
 
   // Active Modals State
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -268,8 +313,13 @@ export const ProformaInvoicesView: React.FC = () => {
                     <React.Fragment key={emp.employeeId}>
                       {/* MAIN EMPLOYEE ROW */}
                       <tr
-                        className={`hover:bg-slate-50/80 transition-colors ${
-                          isExpanded ? 'bg-indigo-50/30 font-medium' : ''
+                        id={`prof-emp-row-${emp.employeeId}`}
+                        className={`transition-all duration-500 ${
+                          highlightedEmpId === emp.employeeId
+                            ? 'bg-purple-100/90 ring-2 ring-purple-500 border-purple-400 font-medium animate-pulse shadow-sm'
+                            : isExpanded
+                            ? 'bg-indigo-50/30 font-medium'
+                            : 'hover:bg-slate-50/80'
                         }`}
                       >
                         <td className="p-3 text-center">
@@ -328,6 +378,26 @@ export const ProformaInvoicesView: React.FC = () => {
 
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onNavigate && currentPo) {
+                                  onNavigate('po-tracker', {
+                                    poId: currentPo.id,
+                                    highlightEmployeeId: emp.employeeId,
+                                    initialTab: 'employees',
+                                  });
+                                } else {
+                                  showToast('Navigation Error', 'Target Purchase Order could not be located.', 'error');
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-xs font-semibold cursor-pointer border border-slate-300 transition-colors"
+                              title="View PO Assignment for this employee"
+                            >
+                              <Briefcase className="w-3.5 h-3.5 text-slate-600" />
+                              <span>View PO Assignment</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => toggleExpand(emp.employeeId)}

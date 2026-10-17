@@ -118,6 +118,8 @@ export function AppContent() {
           initialStatusFilter={navigationParams?.statusFilter}
           initialProjectFilter={navigationParams?.projectFilter}
           selectedPoId={navigationParams?.poId}
+          highlightEmployeeId={navigationParams?.highlightEmployeeId}
+          initialTab={navigationParams?.initialTab}
         />
       )}
       {currentTab === 'projects' && (
@@ -127,7 +129,13 @@ export function AppContent() {
         />
       )}
       {currentTab === 'invoices' && <InvoicesView />}
-      {currentTab === 'proforma-invoices' && <ProformaInvoicesView />}
+      {currentTab === 'proforma-invoices' && (
+        <ProformaInvoicesView
+          onNavigate={handleNavigate}
+          initialPoId={navigationParams?.poId}
+          highlightEmployeeId={navigationParams?.highlightEmployeeId}
+        />
+      )}
       {currentTab === 'documents' && (
         <DocumentsView
           onNavigate={handleNavigate}
