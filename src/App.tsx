@@ -13,6 +13,7 @@ import { AdminDashboardView } from './components/admin/Dashboard/AdminDashboardV
 import { POTrackerMain } from './components/admin/POTracker/POTrackerMain';
 import { ProjectsView } from './components/admin/Projects/ProjectsView';
 import { InvoicesView } from './components/admin/Invoices/InvoicesView';
+import { ProformaInvoicesView } from './components/admin/ProformaInvoices/ProformaInvoicesView';
 import { DocumentsView } from './components/admin/Documents/DocumentsView';
 import { AssignmentsView } from './components/admin/Assignments/AssignmentsView';
 import { OnboardingDashboard } from './components/admin/Onboarding/OnboardingDashboard';
@@ -126,6 +127,7 @@ export function AppContent() {
         />
       )}
       {currentTab === 'invoices' && <InvoicesView />}
+      {currentTab === 'proforma-invoices' && <ProformaInvoicesView />}
       {currentTab === 'documents' && (
         <DocumentsView
           onNavigate={handleNavigate}

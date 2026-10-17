@@ -114,7 +114,9 @@ export interface Invoice {
   employeeContributions?: InvoiceEmployeeContribution[];
 }
 
-export type AssignmentStatus = 'Active' | 'Ending Soon' | 'Completed' | 'On Hold' | 'Terminated' | 'Unassigned';
+export type AssignmentStatus = 'Active' | 'Ending Soon' | 'Completed' | 'On Hold' | 'Terminated' | 'Unassigned' | 'Inactive';
+
+export type BillableDaysMethod = 'calendar' | 'working_days' | 'manual';
 
 export interface AssignedEmployee {
   employeeId: string;
@@ -123,7 +125,65 @@ export interface AssignedEmployee {
   billingRatePerMonth: number;
   assignedFrom: string;
   assignedTo: string;
-  status: 'Active' | 'Unassigned';
+  status: 'Active' | 'Inactive' | 'Unassigned';
+  billableDaysMethod?: BillableDaysMethod;
+  manualBillableDays?: number;
+  email?: string;
+  replacedByEmployeeId?: string;
+  replacementDate?: string;
+}
+
+export type ProformaStatus = 'Draft' | 'Sent' | 'Approved' | 'Invoiced' | 'Cancelled';
+
+export interface ProformaLineItem {
+  id: string;
+  description: string;
+  quantity: number; // e.g. Days or 1
+  rate: number;
+  amount: number;
+  hsnSac?: string;
+}
+
+export interface ProformaVersion {
+  version: number;
+  updatedAt: string;
+  updatedBy: string;
+  amountExclGst: number;
+  gstAmount: number;
+  totalAmountInclGst: number;
+  notes?: string;
+}
+
+export interface ProformaInvoice {
+  id: string;
+  proformaNumber: string;
+  poId: string;
+  poNumber: string;
+  projectId: string;
+  projectName: string;
+  employeeId: string;
+  employeeName: string;
+  employeeEmail?: string;
+  designation: string;
+  billingMonth: string;
+  billingYear: number;
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  billableDaysMethod?: BillableDaysMethod;
+  billableDays?: number;
+  amountExclGst: number;
+  gstRate: number;
+  gstAmount: number;
+  totalAmountInclGst: number;
+  status: ProformaStatus;
+  version: number;
+  versions: ProformaVersion[];
+  lineItems: ProformaLineItem[];
+  notes?: string;
+  recipientEmail?: string;
+  sentAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EmployeeAssignment {
@@ -145,6 +205,8 @@ export interface EmployeeAssignment {
   status: AssignmentStatus;
   effectiveTerminationDate?: string;
   terminationReason?: string;
+  billableDaysMethod?: BillableDaysMethod;
+  manualBillableDays?: number;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;

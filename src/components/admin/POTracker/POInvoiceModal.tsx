@@ -4,9 +4,7 @@ import { Modal, Input, Button } from '../../common/UIComponents';
 import { PurchaseOrder } from '../../../types/domain';
 import { formatINR } from '../../../lib/utils';
 import { validateNewCreditNoteAmount } from '../../../lib/poUtils';
-import { getPOEmployeeEligibleBillingForMonth } from '../../../lib/assignmentUtils';
-import { FileText, AlertCircle, Upload, CheckCircle2, X, Users, Calculator } from 'lucide-react';
-import { SearchableEmployeeSelector } from '../../common/SearchableEmployeeSelector';
+import { AlertCircle, Upload, CheckCircle2 } from 'lucide-react';
 
 interface POInvoiceModalProps {
   po: PurchaseOrder;
@@ -15,7 +13,7 @@ interface POInvoiceModalProps {
 }
 
 export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onClose }) => {
-  const { addInvoice, employees, assignments = [] } = useData();
+  const { addInvoice } = useData();
 
   const todayStr = new Date().toISOString().split('T')[0];
   const defaultDueDateStr = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -45,9 +43,6 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
     `${todayStr.slice(0, 7)}-01`
   );
   const [billingPeriodEnd, setBillingPeriodEnd] = useState(todayStr);
-
-  // Assigned Employees State
-  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
 
   // Financial Defaults (Defaulting strictly to 0)
   const [amountExclGst, setAmountExclGst] = useState<number>(0);
@@ -134,14 +129,6 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
       ? attachedFile.name
       : `${invoiceNumber.replace(/\//g, '_')}.pdf`;
 
-    const selectedEmployeeNames = selectedEmployeeIds
-      .map((id) => {
-        const emp = employees.find((e) => e.employeeId === id) ||
-          po.assignedEmployees.find((e) => e.employeeId === id);
-        return emp ? ('name' in emp ? emp.name : emp.employeeName) : id;
-      })
-      .filter(Boolean);
-
     addInvoice(po.id, {
       invoiceNumber: invoiceNumber.trim(),
       invoiceDate,
@@ -158,10 +145,8 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
       notes: notes.trim(),
       documentName: docName,
       fileData: attachedFile || undefined,
-      employeeIds: selectedEmployeeIds,
-      employeeNames: selectedEmployeeNames,
-      employeeId: selectedEmployeeIds[0] || undefined,
-      employeeName: selectedEmployeeNames[0] || undefined,
+      employeeIds: [],
+      employeeNames: [],
     });
 
     onClose();
@@ -290,95 +275,6 @@ export const POInvoiceModal: React.FC<POInvoiceModalProps> = ({ po, isOpen, onCl
             required
           />
         </div>
-
-        {/* ASSIGNED EMPLOYEE(S) SELECTOR */}
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-          <label className="block font-semibold text-slate-800 text-xs">
-            Assigned Employee(s) <span className="text-slate-400 font-normal">(Optional)</span>
-          </label>
-          <p className="text-[11px] text-slate-500">
-            Specify the employee(s) attributed to this {isCreditNote ? 'credit note' : 'invoice'}. You can browse the list or search by name or ID.
-          </p>
-
-          <SearchableEmployeeSelector
-            allEmployees={employees}
-            poEmployees={po.assignedEmployees}
-            selectedEmployeeIds={selectedEmployeeIds}
-            onChange={setSelectedEmployeeIds}
-            placeholder={`-- Select or Search Employee for ${isCreditNote ? 'Credit Note' : 'Invoice'} --`}
-            isCreditNote={isCreditNote}
-          />
-        </div>
-
-        {/* EMPLOYEE ALLOCATION BILLING BREAKDOWN */}
-        {(() => {
-          const employeeBillingBreakdown = getPOEmployeeEligibleBillingForMonth({
-            poId: po.id,
-            assignments,
-            billingYear,
-            billingMonth,
-          });
-          const suggestedEmployeeTotal = employeeBillingBreakdown.reduce(
-            (sum, item) => sum + item.eligibleAmount,
-            0
-          );
-
-          if (employeeBillingBreakdown.length === 0 || isCreditNote) return null;
-
-          return (
-            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-2 text-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="font-semibold text-blue-950 flex items-center gap-1.5">
-                  <Calculator className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>
-                    Monthly Allocation Billing Breakdown ({billingMonth} {billingYear})
-                  </span>
-                </div>
-                {suggestedEmployeeTotal > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setAmountExclGst(suggestedEmployeeTotal)}
-                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-[11px] transition-colors self-start sm:self-auto cursor-pointer"
-                  >
-                    Apply Suggested Total: ₹{suggestedEmployeeTotal.toLocaleString('en-IN')}
-                  </button>
-                )}
-              </div>
-
-              <div className="space-y-1.5 pt-1">
-                {employeeBillingBreakdown.map((item) => (
-                  <div
-                    key={item.assignmentId}
-                    className="flex items-center justify-between bg-white p-2 rounded border border-blue-100 text-[11px]"
-                  >
-                    <div>
-                      <strong className="text-slate-900">{item.employeeName}</strong>{' '}
-                      <span className="text-slate-500">({item.employeeId})</span>
-                      <span className="text-slate-500 block text-[10px]">
-                        {item.isFullMonth ? (
-                          <span className="text-emerald-700 font-medium">
-                            Full Month ({item.eligibleDays}/{item.totalDaysInMonth} days) · Rate: ₹
-                            {item.monthlyBillingRate.toLocaleString('en-IN')}/mo
-                          </span>
-                        ) : (
-                          <span className="text-amber-800 font-medium">
-                            Prorated ({item.eligibleDays}/{item.totalDaysInMonth} days)
-                            {item.status === 'Terminated'
-                              ? ` · Effective End ${item.effectiveTerminationDate}`
-                              : ''}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="text-right font-mono font-bold text-slate-900">
-                      ₹{item.eligibleAmount.toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
 
         {/* FINANCIAL CALCULATOR SECTION */}
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">

@@ -27,6 +27,7 @@ import { POInvoiceModal } from './POInvoiceModal';
 import { PORenewalModal } from './PORenewalModal';
 import { POEmployeeAssignModal } from './POEmployeeAssignModal';
 import { POAmendModal } from './POAmendModal';
+import { POEmployeeReplaceModal } from './POEmployeeReplaceModal';
 import { TerminateAssignmentModal } from '../Assignments/TerminateAssignmentModal';
 
 interface PODetailPageProps {
@@ -45,6 +46,9 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [renewalModalOpen, setRenewalModalOpen] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [selectedEmployeeToEdit, setSelectedEmployeeToEdit] = useState<string | undefined>(undefined);
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [selectedEmployeeToReplace, setSelectedEmployeeToReplace] = useState<any | null>(null);
   const [amendModalOpen, setAmendModalOpen] = useState(false);
   const [selectedTerminateAssignment, setSelectedTerminateAssignment] = useState<any | null>(null);
   const [previewDoc, setPreviewDoc] = useState<{
@@ -764,7 +768,10 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                 variant="primary"
                 size="sm"
                 icon={<Plus className="w-3.5 h-3.5" />}
-                onClick={() => setAssignModalOpen(true)}
+                onClick={() => {
+                  setSelectedEmployeeToEdit(undefined);
+                  setAssignModalOpen(true);
+                }}
               >
                 Tag Employee
               </Button>
@@ -780,40 +787,94 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
                   <th className="p-3">Designation</th>
                   <th className="p-3 text-right">Billing Rate / Mo</th>
                   <th className="p-3">Assignment Period</th>
+                  <th className="p-3">Billable Method</th>
+                  <th className="p-3">Status</th>
                   <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {po.assignedEmployees.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-slate-400">
+                    <td colSpan={8} className="p-6 text-center text-slate-400">
                       No employees tagged to this PO yet.
                     </td>
                   </tr>
                 ) : (
-                  po.assignedEmployees.map((emp) => (
-                    <tr key={emp.employeeId} className="hover:bg-slate-50">
-                      <td className="p-3 font-semibold text-slate-900">{emp.employeeName}</td>
-                      <td className="p-3 font-mono text-slate-600">{emp.employeeId}</td>
-                      <td className="p-3 text-slate-600">{emp.designation}</td>
-                      <td className="p-3 text-right font-mono font-medium text-slate-900 tabular-nums">
-                        {formatINR(emp.billingRatePerMonth)}
-                      </td>
-                      <td className="p-3 text-slate-600">
-                        {formatDate(emp.assignedFrom)} – {formatDate(emp.assignedTo)}
-                      </td>
-                      <td className="p-3 text-right">
-                        {permissions.canAssignEmployeesToPO && (
-                          <button
-                            onClick={() => unassignEmployeeFromPO(po.id, emp.employeeId)}
-                            className="text-red-600 hover:text-red-800 text-xs font-medium"
-                          >
-                            Untag
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  po.assignedEmployees.map((emp) => {
+                    const today = new Date().toISOString().split('T')[0];
+                    const isExpired = Boolean(emp.assignedTo && today > emp.assignedTo);
+                    const isInactive = emp.status === 'Inactive' || emp.status === 'Unassigned' || isExpired;
+
+                    const methodLabel =
+                      emp.billableDaysMethod === 'working_days'
+                        ? 'Working Days'
+                        : emp.billableDaysMethod === 'manual'
+                        ? `Manual (${emp.manualBillableDays || 0}d)`
+                        : 'Calendar Days';
+
+                    return (
+                      <tr key={emp.employeeId} className="hover:bg-slate-50">
+                        <td className="p-3 font-semibold text-slate-900">{emp.employeeName}</td>
+                        <td className="p-3 font-mono text-slate-600">{emp.employeeId}</td>
+                        <td className="p-3 text-slate-600">{emp.designation}</td>
+                        <td className="p-3 text-right font-mono font-medium text-slate-900 tabular-nums">
+                          {formatINR(emp.billingRatePerMonth)}
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          {formatDate(emp.assignedFrom)} – {formatDate(emp.assignedTo)}
+                        </td>
+                        <td className="p-3 text-slate-600">
+                          <span className="text-[10px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            {methodLabel}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          {isInactive ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              Inactive (Expired)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              Active
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {permissions.canAssignEmployeesToPO && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedEmployeeToEdit(emp.employeeId);
+                                    setAssignModalOpen(true);
+                                  }}
+                                  className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold cursor-pointer"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedEmployeeToReplace(emp);
+                                    setReplaceModalOpen(true);
+                                  }}
+                                  className="text-amber-600 hover:text-amber-800 text-xs font-semibold cursor-pointer"
+                                  title="Replace employee on this PO"
+                                >
+                                  Replace
+                                </button>
+                                <button
+                                  onClick={() => unassignEmployeeFromPO(po.id, emp.employeeId)}
+                                  className="text-red-600 hover:text-red-800 text-xs font-medium cursor-pointer"
+                                >
+                                  Untag
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -906,7 +967,11 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
         <POEmployeeAssignModal
           po={po}
           isOpen={assignModalOpen}
-          onClose={() => setAssignModalOpen(false)}
+          initialEmployeeId={selectedEmployeeToEdit}
+          onClose={() => {
+            setAssignModalOpen(false);
+            setSelectedEmployeeToEdit(undefined);
+          }}
         />
       )}
 
@@ -915,6 +980,18 @@ export const PODetailPage: React.FC<PODetailPageProps> = ({ po, onBack }) => {
           po={po}
           isOpen={amendModalOpen}
           onClose={() => setAmendModalOpen(false)}
+        />
+      )}
+
+      {replaceModalOpen && selectedEmployeeToReplace && (
+        <POEmployeeReplaceModal
+          po={po}
+          outgoingEmployee={selectedEmployeeToReplace}
+          isOpen={replaceModalOpen}
+          onClose={() => {
+            setReplaceModalOpen(false);
+            setSelectedEmployeeToReplace(null);
+          }}
         />
       )}
 

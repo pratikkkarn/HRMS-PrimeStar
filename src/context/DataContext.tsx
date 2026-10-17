@@ -20,6 +20,8 @@ import {
   UserPreferences,
   POAmendment,
   EmployeeAssignment,
+  ProformaInvoice,
+  BillableDaysMethod,
 } from '../types/domain';
 import {
   INITIAL_PROJECTS,
@@ -32,6 +34,7 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_PROFILE_REQUESTS,
   INITIAL_ASSIGNMENTS,
+  INITIAL_PROFORMA_INVOICES,
 } from '../services/mockData';
 import { recalculatePOBalances, recalculateProjectBalances, applyPOAmendment, validatePOAmendment } from '../lib/poUtils';
 import { useNotification } from './NotificationContext';
@@ -51,6 +54,7 @@ const STORAGE_KEYS = {
   CUSTOM_DOCS: 'primestar_custom_documents',
   DELETED_DOC_IDS: 'primestar_deleted_doc_ids',
   ASSIGNMENTS: 'primestar_employee_assignments',
+  PROFORMA_INVOICES: 'primestar_proforma_invoices',
 };
 
 export const ALL_SYSTEM_STORAGE_KEYS = [
@@ -67,6 +71,7 @@ export const ALL_SYSTEM_STORAGE_KEYS = [
   'primestar_custom_documents',
   'primestar_deleted_doc_ids',
   'primestar_employee_assignments',
+  'primestar_proforma_invoices',
 ];
 
 export function createVerifiedLocalStorageBackup(): { success: boolean; backupKey?: string; error?: string } {
@@ -193,6 +198,7 @@ interface DataContextType {
   timesheets: TimesheetEntry[];
   notifications: SystemNotification[];
   assignments: EmployeeAssignment[];
+  proformaInvoices: ProformaInvoice[];
 
   // PO Actions
   addProject: (project: Omit<Project, 'id' | 'totalPoValue' | 'remainingBalance' | 'assignedHeadcount'>) => Project;
@@ -225,13 +231,33 @@ interface DataContextType {
   cancelInvoice: (poId: string, invoiceId: string) => void;
   assignEmployeeToPO: (poId: string, assignment: Omit<AssignedEmployee, 'status'>) => void;
   unassignEmployeeFromPO: (poId: string, employeeId: string) => void;
+  replaceEmployeeOnPO: (
+    poId: string,
+    params: {
+      outgoingEmployeeId: string;
+      replacementEmployeeId: string;
+      effectiveDate: string;
+      billingRatePerMonth: number;
+      billableDaysMethod?: BillableDaysMethod;
+      manualBillableDays?: number;
+      replacementAssignedTo?: string;
+      reason?: string;
+    }
+  ) => void;
   addSOW: (sow: Omit<StatementOfWork, 'id'>) => StatementOfWork;
   addQuotation: (quot: Omit<Quotation, 'id'>) => Quotation;
+
+  // Proforma Invoice Actions
+  addProformaInvoice: (proforma: Omit<ProformaInvoice, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'versions'>) => ProformaInvoice;
+  updateProformaInvoice: (id: string, updates: Partial<ProformaInvoice>, createNewVersion?: boolean) => void;
+  deleteProformaInvoice: (id: string) => void;
+  shareProformaInvoice: (id: string, recipientEmail: string, notes?: string) => { success: boolean; mode: 'sent' | 'draft_fallback'; message: string; mailtoUrl?: string };
 
   // Employee Assignment Actions
   addAssignment: (assignment: Omit<EmployeeAssignment, 'id'>) => EmployeeAssignment;
   updateAssignment: (id: string, updatedFields: Partial<EmployeeAssignment>) => void;
   terminateAssignment: (id: string, effectiveTerminationDate: string, reason: string) => void;
+  updateEmployeeEmail: (employeeId: string, email: string) => void;
 
   // Candidate / Onboarding Actions
   inviteCandidate: (candidateData: {
@@ -340,6 +366,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loadStoredData<EmployeeAssignment[]>(STORAGE_KEYS.ASSIGNMENTS, INITIAL_ASSIGNMENTS)
   );
 
+  const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>(() =>
+    loadStoredData<ProformaInvoice[]>(STORAGE_KEYS.PROFORMA_INVOICES, INITIAL_PROFORMA_INVOICES)
+  );
+
   const { showToast } = useNotification();
   const { currentUser, updateProfileOverride } = useRole();
 
@@ -350,6 +380,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Error saving assignments to localStorage:', e);
     }
   }, [assignments]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.PROFORMA_INVOICES, JSON.stringify(proformaInvoices));
+    } catch (e) {
+      console.error('Error saving proforma invoices to localStorage:', e);
+    }
+  }, [proformaInvoices]);
 
   useEffect(() => {
     try {
@@ -921,7 +959,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const assignEmployeeToPO = (poId: string, assignment: Omit<AssignedEmployee, 'status'>) => {
-    const newAssigned: AssignedEmployee = { ...assignment, status: 'Active' };
+    const today = new Date().toISOString().split('T')[0];
+    const isExpired = Boolean(assignment.assignedTo && today > assignment.assignedTo);
+    const newAssigned: AssignedEmployee = {
+      ...assignment,
+      status: isExpired ? 'Inactive' : 'Active',
+      billableDaysMethod: assignment.billableDaysMethod || 'calendar',
+      manualBillableDays: assignment.billableDaysMethod === 'manual' ? assignment.manualBillableDays : undefined,
+    };
     setPurchaseOrders((prev) =>
       prev.map((po) => {
         if (po.id === poId) {
@@ -980,6 +1025,358 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       })
     );
     showToast('Employee Removed', 'Employee untagged from PO.');
+  };
+
+  const replaceEmployeeOnPO = (
+    poId: string,
+    params: {
+      outgoingEmployeeId: string;
+      replacementEmployeeId: string;
+      effectiveDate: string;
+      billingRatePerMonth: number;
+      billableDaysMethod?: BillableDaysMethod;
+      manualBillableDays?: number;
+      replacementAssignedTo?: string;
+      reason?: string;
+    }
+  ) => {
+    const po = purchaseOrders.find((p) => p.id === poId);
+    if (!po) {
+      showToast('Error', 'Purchase Order not found', 'error');
+      return;
+    }
+
+    const outgoing = po.assignedEmployees.find((e) => e.employeeId === params.outgoingEmployeeId);
+    if (!outgoing) {
+      showToast('Error', 'Outgoing employee is not assigned to this PO', 'error');
+      return;
+    }
+
+    const replacementProfile = employees.find((e) => e.employeeId === params.replacementEmployeeId);
+    const replacementName = replacementProfile?.name || params.replacementEmployeeId;
+    const replacementDesignation = replacementProfile?.designation || outgoing.designation;
+    const replacementEmail = replacementProfile?.email;
+
+    const repAssignedTo = params.replacementAssignedTo || outgoing.assignedTo || po.expiryDate;
+    const today = new Date().toISOString().split('T')[0];
+    const isRepExpired = Boolean(repAssignedTo && today > repAssignedTo);
+
+    // 1. Update outgoing employee record: keep historically, set status to Inactive and assignedTo to effectiveDate
+    const updatedEmployees = po.assignedEmployees.map((e) => {
+      if (e.employeeId === params.outgoingEmployeeId) {
+        return {
+          ...e,
+          assignedTo: params.effectiveDate,
+          status: 'Inactive' as const,
+          replacedByEmployeeId: params.replacementEmployeeId,
+          replacementDate: params.effectiveDate,
+        };
+      }
+      return e;
+    });
+
+    // 2. Add or update replacement employee record
+    const replacementExists = updatedEmployees.some((e) => e.employeeId === params.replacementEmployeeId);
+    const replacementRecord: AssignedEmployee = {
+      employeeId: params.replacementEmployeeId,
+      employeeName: replacementName,
+      designation: replacementDesignation,
+      billingRatePerMonth: params.billingRatePerMonth,
+      assignedFrom: params.effectiveDate,
+      assignedTo: repAssignedTo,
+      status: isRepExpired ? 'Inactive' : 'Active',
+      billableDaysMethod: params.billableDaysMethod || 'calendar',
+      manualBillableDays: params.billableDaysMethod === 'manual' ? params.manualBillableDays : undefined,
+      email: replacementEmail,
+    };
+
+    const finalAssignedEmployees = replacementExists
+      ? updatedEmployees.map((e) => (e.employeeId === params.replacementEmployeeId ? replacementRecord : e))
+      : [...updatedEmployees, replacementRecord];
+
+    // 3. Update PO and log activity
+    setPurchaseOrders((prev) =>
+      prev.map((p) => {
+        if (p.id === poId) {
+          return {
+            ...p,
+            assignedEmployees: finalAssignedEmployees,
+            activityLogs: [
+              ...p.activityLogs,
+              {
+                id: `act-${Date.now()}`,
+                poId,
+                timestamp: new Date().toLocaleString('en-IN'),
+                userName: currentUser.name,
+                userRole: currentUser.role,
+                action: 'Employee Replaced on PO',
+                details: `Replaced ${outgoing.employeeName} (${outgoing.employeeId}) with ${replacementName} (${params.replacementEmployeeId}) effective ${params.effectiveDate}. Outgoing assignment ended; historical invoices and proformas preserved. ${params.reason ? `Reason: ${params.reason}` : ''}`,
+              },
+            ],
+          };
+        }
+        return p;
+      })
+    );
+
+    // 4. Update project EmployeeAssignment records if present
+    setAssignments((prev) => {
+      const updated = prev.map((a) => {
+        if (a.poId === poId && a.employeeId === params.outgoingEmployeeId && a.status === 'Active') {
+          return {
+            ...a,
+            assignedTo: params.effectiveDate,
+            status: 'Terminated' as const,
+            effectiveTerminationDate: params.effectiveDate,
+            terminationReason: params.reason || `Replaced by ${replacementName}`,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return a;
+      });
+
+      const repAsgnExists = updated.some((a) => a.poId === poId && a.employeeId === params.replacementEmployeeId);
+      if (!repAsgnExists) {
+        const newAsgn: EmployeeAssignment = {
+          id: `asgn-${Date.now()}`,
+          employeeId: params.replacementEmployeeId,
+          employeeName: replacementName,
+          designation: replacementDesignation,
+          department: replacementProfile?.department,
+          projectId: po.projectId,
+          projectName: po.projectName,
+          poId: po.id,
+          poNumber: po.poNumber,
+          assignedFrom: params.effectiveDate,
+          assignedTo: repAssignedTo,
+          allocationPercentage: 100,
+          billingRatePerMonth: params.billingRatePerMonth,
+          billableDaysMethod: params.billableDaysMethod || 'calendar',
+          manualBillableDays: params.manualBillableDays,
+          status: isRepExpired ? 'Inactive' : 'Active',
+          notes: `Replacement for ${outgoing.employeeName} effective ${params.effectiveDate}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        return [newAsgn, ...updated];
+      }
+      return updated;
+    });
+
+    showToast(
+      'Employee Replacement Applied',
+      `Replaced ${outgoing.employeeName} with ${replacementName} effective ${params.effectiveDate}.`
+    );
+  };
+
+  const addProformaInvoice = (
+    data: Omit<ProformaInvoice, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'versions'>
+  ): ProformaInvoice => {
+    const gstRate = data.gstRate ?? 18;
+    const gstAmount = data.gstAmount ?? Math.round(data.amountExclGst * (gstRate / 100));
+    const totalAmountInclGst = data.totalAmountInclGst ?? (data.amountExclGst + gstAmount);
+    const now = new Date().toISOString();
+    const formattedNow = new Date().toLocaleString('en-IN');
+
+    const newProforma: ProformaInvoice = {
+      ...data,
+      id: `prof-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      gstRate,
+      gstAmount,
+      totalAmountInclGst,
+      status: data.status || 'Draft',
+      version: 1,
+      versions: [
+        {
+          version: 1,
+          updatedAt: formattedNow,
+          updatedBy: currentUser.name,
+          amountExclGst: data.amountExclGst,
+          gstAmount,
+          totalAmountInclGst,
+          notes: data.notes || 'Initial draft version',
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setProformaInvoices((prev) => [newProforma, ...prev]);
+
+    // Financial isolation: PO remaining balance and invoiced total are NOT mutated by creating proformas!
+    setPurchaseOrders((prev) =>
+      prev.map((p) => {
+        if (p.id === data.poId) {
+          return {
+            ...p,
+            activityLogs: [
+              ...p.activityLogs,
+              {
+                id: `act-${Date.now()}`,
+                poId: data.poId,
+                timestamp: formattedNow,
+                userName: currentUser.name,
+                userRole: currentUser.role,
+                action: 'Proforma Invoice Created',
+                details: `Draft Proforma ${newProforma.proformaNumber} generated for ${data.employeeName} (₹${data.amountExclGst.toLocaleString('en-IN')}). PO balance remains unaffected.`,
+              },
+            ],
+          };
+        }
+        return p;
+      })
+    );
+
+    showToast('Proforma Created', `Proforma Invoice ${newProforma.proformaNumber} saved as Draft.`);
+    return newProforma;
+  };
+
+  const updateProformaInvoice = (id: string, updates: Partial<ProformaInvoice>, createNewVersion = false) => {
+    setProformaInvoices((prev) =>
+      prev.map((prof) => {
+        if (prof.id !== id) return prof;
+
+        const formattedNow = new Date().toLocaleString('en-IN');
+        const now = new Date().toISOString();
+        const amtExcl = updates.amountExclGst ?? prof.amountExclGst;
+        const rate = updates.gstRate ?? prof.gstRate;
+        const gstAmt = updates.gstAmount ?? Math.round(amtExcl * (rate / 100));
+        const totalAmt = updates.totalAmountInclGst ?? (amtExcl + gstAmt);
+
+        const shouldBumpVersion = createNewVersion || (prof.status !== 'Draft' && (updates.amountExclGst !== undefined || updates.lineItems !== undefined));
+        const nextVersion = shouldBumpVersion ? prof.version + 1 : prof.version;
+
+        const updatedVersions = shouldBumpVersion
+          ? [
+              ...prof.versions,
+              {
+                version: nextVersion,
+                updatedAt: formattedNow,
+                updatedBy: currentUser.name,
+                amountExclGst: amtExcl,
+                gstAmount: gstAmt,
+                totalAmountInclGst: totalAmt,
+                notes: updates.notes || `Revision v${nextVersion}`,
+              },
+            ]
+          : prof.versions;
+
+        return {
+          ...prof,
+          ...updates,
+          amountExclGst: amtExcl,
+          gstRate: rate,
+          gstAmount: gstAmt,
+          totalAmountInclGst: totalAmt,
+          version: nextVersion,
+          versions: updatedVersions,
+          updatedAt: now,
+        };
+      })
+    );
+    showToast('Proforma Updated', `Proforma Invoice record updated successfully.`);
+  };
+
+  const deleteProformaInvoice = (id: string) => {
+    setProformaInvoices((prev) => prev.filter((p) => p.id !== id));
+    showToast('Proforma Deleted', 'Proforma invoice removed.');
+  };
+
+  const shareProformaInvoice = (id: string, recipientEmail: string, notes?: string) => {
+    const prof = proformaInvoices.find((p) => p.id === id);
+    if (!prof) {
+      showToast('Error', 'Proforma Invoice not found', 'error');
+      return { success: false, mode: 'draft_fallback' as const, message: 'Proforma not found' };
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recipientEmail.trim())) {
+      showToast('Invalid Email', 'Please provide a valid recipient email address', 'error');
+      return { success: false, mode: 'draft_fallback' as const, message: 'Invalid email address' };
+    }
+
+    const formattedNow = new Date().toLocaleString('en-IN');
+    const now = new Date().toISOString();
+
+    setProformaInvoices((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              status: p.status === 'Draft' ? 'Sent' : p.status,
+              recipientEmail: recipientEmail.trim(),
+              sentAt: now,
+              notes: notes ? (p.notes ? `${p.notes} | ${notes}` : notes) : p.notes,
+              updatedAt: now,
+            }
+          : p
+      )
+    );
+
+    // Audit log
+    setPurchaseOrders((prev) =>
+      prev.map((po) => {
+        if (po.id === prof.poId) {
+          return {
+            ...po,
+            activityLogs: [
+              ...po.activityLogs,
+              {
+                id: `act-${Date.now()}`,
+                poId: po.id,
+                timestamp: formattedNow,
+                userName: currentUser.name,
+                userRole: currentUser.role,
+                action: 'Proforma Invoice Shared',
+                details: `Proforma Invoice ${prof.proformaNumber} (v${prof.version}) prepared for ${prof.employeeName} to recipient ${recipientEmail.trim()} via Draft/Preview fallback (Local delivery mode: No external outbound SMTP service configured).`,
+              },
+            ],
+          };
+        }
+        return po;
+      })
+    );
+
+    const subject = encodeURIComponent(`Proforma Invoice ${prof.proformaNumber} — ${prof.projectName}`);
+    const body = encodeURIComponent(
+      `Dear ${prof.employeeName},\n\nPlease review attached Proforma Invoice ${prof.proformaNumber} for period ${prof.billingPeriodStart} to ${prof.billingPeriodEnd}.\nTotal Amount: INR ${prof.totalAmountInclGst.toLocaleString('en-IN')}.\n\nRegards,\nPrime Star Finance & Billing Team`
+    );
+    const mailtoUrl = `mailto:${encodeURIComponent(recipientEmail.trim())}?subject=${subject}&body=${body}`;
+
+    showToast(
+      'Proforma Shared (Draft Fallback)',
+      `Recipient confirmed (${recipientEmail.trim()}). Prepared draft dispatch fallback.`
+    );
+
+    return {
+      success: true,
+      mode: 'draft_fallback' as const,
+      message: `Proforma document ready. Recipient confirmed as ${recipientEmail.trim()}. Generated draft email link and PDF attachment preview.`,
+      mailtoUrl,
+    };
+  };
+
+  const updateEmployeeEmail = (employeeId: string, email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      showToast('Invalid Email', 'Please provide a valid email format.', 'error');
+      return;
+    }
+
+    setEmployees((prev) =>
+      prev.map((e) => (e.employeeId === employeeId ? { ...e, email: email.trim() } : e))
+    );
+
+    setPurchaseOrders((prev) =>
+      prev.map((po) => ({
+        ...po,
+        assignedEmployees: po.assignedEmployees.map((ae) =>
+          ae.employeeId === employeeId ? { ...ae, email: email.trim() } : ae
+        ),
+      }))
+    );
+
+    showToast('Email Updated', `Updated email address for ${employeeId}.`);
   };
 
   const addSOW = (sowData: Omit<StatementOfWork, 'id'>): StatementOfWork => {
@@ -1650,6 +2047,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         profileRequests,
         userPreferences,
         assignments,
+        proformaInvoices,
         addProject,
         createPO,
         updatePO,
@@ -1662,6 +2060,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         cancelInvoice,
         assignEmployeeToPO,
         unassignEmployeeFromPO,
+        replaceEmployeeOnPO,
+        addProformaInvoice,
+        updateProformaInvoice,
+        deleteProformaInvoice,
+        shareProformaInvoice,
+        updateEmployeeEmail,
         addSOW,
         addQuotation,
         addAssignment,

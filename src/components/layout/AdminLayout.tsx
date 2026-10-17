@@ -23,6 +23,7 @@ import {
   User,
   Shield,
   UserCheck,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -65,6 +66,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         { id: 'projects', label: 'Projects', icon: Briefcase, visible: permissions.canViewPODashboard },
         { id: 'po-tracker', label: 'Purchase Orders', icon: FileText, visible: permissions.canViewPODashboard },
         { id: 'invoices', label: 'Invoices', icon: DollarSign, visible: permissions.canViewFinancials },
+        { id: 'proforma-invoices', label: 'Proforma Invoices', icon: FileSpreadsheet, visible: permissions.canViewFinancials || permissions.canManageInvoices },
         { id: 'documents', label: 'Documents', icon: FolderKanban, visible: permissions.canViewPODashboard },
         { id: 'assignments', label: 'Employee Assignments', icon: Users, visible: permissions.canAssignEmployeesToPO },
       ],

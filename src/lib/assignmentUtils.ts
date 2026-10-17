@@ -238,10 +238,75 @@ export interface ProrationResult {
   effectiveEndDateStr: string;
 }
 
+import { BillableDaysMethod } from '../types/domain';
+
 /**
- * Calculates calendar-day prorated billing amount for an employee assignment in a specific billing month.
- * Formula: Eligible amount = Monthly employee billing amount * Eligible calendar days / Total calendar days in billing month.
- * Departure date treatment: Employee is billable ON and up to the effective termination date (inclusive).
+ * Calculates inclusive calendar days between two dates (YYYY-MM-DD).
+ */
+export function calculateCalendarDays(startDateStr: string, endDateStr: string): number {
+  if (!startDateStr || !endDateStr || startDateStr > endDateStr) return 0;
+  const [sy, sm, sd] = startDateStr.split('-').map(Number);
+  const [ey, em, ed] = endDateStr.split('-').map(Number);
+  const start = new Date(Date.UTC(sy, sm - 1, sd));
+  const end = new Date(Date.UTC(ey, em - 1, ed));
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+  const diffMs = end.getTime() - start.getTime();
+  return Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+}
+
+/**
+ * Calculates working days (Monday-Friday) between two inclusive dates (YYYY-MM-DD).
+ */
+export function calculateWorkingDays(startDateStr: string, endDateStr: string): number {
+  if (!startDateStr || !endDateStr || startDateStr > endDateStr) return 0;
+  const [sy, sm, sd] = startDateStr.split('-').map(Number);
+  const [ey, em, ed] = endDateStr.split('-').map(Number);
+  const start = new Date(Date.UTC(sy, sm - 1, sd));
+  const end = new Date(Date.UTC(ey, em - 1, ed));
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+
+  let count = 0;
+  const current = new Date(start);
+  while (current <= end) {
+    const day = current.getUTCDay();
+    if (day !== 0 && day !== 6) { // Exclude Sunday (0) and Saturday (6)
+      count++;
+    }
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+  return count;
+}
+
+/**
+ * Checks if a PO assignment is expired based on its last working day (assignedTo).
+ * The employee is eligible ON and up to the end date inclusive;
+ * once the current date is strictly later than the end date, it is expired.
+ */
+export function isPOAssignmentExpired(assignedTo?: string, asOfDate?: string): boolean {
+  if (!assignedTo) return false;
+  const today = asOfDate || new Date().toISOString().split('T')[0];
+  return today > assignedTo;
+}
+
+/**
+ * Returns the effective status of a PO employee assignment.
+ */
+export function getPOAssignmentEffectiveStatus(
+  assignment: { assignedTo?: string; status?: string },
+  asOfDate?: string
+): 'Active' | 'Inactive' {
+  if (assignment.status === 'Unassigned' || assignment.status === 'Inactive' || assignment.status === 'Terminated') {
+    return 'Inactive';
+  }
+  if (isPOAssignmentExpired(assignment.assignedTo, asOfDate)) {
+    return 'Inactive';
+  }
+  return 'Active';
+}
+
+/**
+ * Calculates prorated billing amount for an employee assignment in a specific billing month
+ * supporting Calendar Days, Working Days (excl. weekends), and Manual entry methods.
  */
 export function calculateProratedBillingAmount(params: {
   monthlyBillingRate: number;
@@ -250,6 +315,8 @@ export function calculateProratedBillingAmount(params: {
   effectiveTerminationDate?: string; // YYYY-MM-DD
   billingYear: number;
   billingMonth: number | string; // 1..12 or "October" or "October 2026"
+  billableDaysMethod?: BillableDaysMethod;
+  manualBillableDays?: number;
 }): ProrationResult {
   const {
     monthlyBillingRate,
@@ -258,6 +325,8 @@ export function calculateProratedBillingAmount(params: {
     effectiveTerminationDate,
     billingYear,
     billingMonth,
+    billableDaysMethod = 'calendar',
+    manualBillableDays,
   } = params;
 
   if (isNaN(monthlyBillingRate) || monthlyBillingRate <= 0) {
@@ -295,7 +364,7 @@ export function calculateProratedBillingAmount(params: {
 
   const effectiveEnd = effectiveTerminationDate || assignedTo;
 
-  // Determine effective range for this month
+  // Determine effective range for this month (intersection of assignment and billing period)
   const effectiveStartForMonth = assignedFrom > monthStartStr ? assignedFrom : monthStartStr;
   const effectiveEndForMonth = effectiveEnd < monthEndStr ? effectiveEnd : monthEndStr;
 
@@ -315,11 +384,75 @@ export function calculateProratedBillingAmount(params: {
     };
   }
 
-  // Calculate inclusive calendar days
-  const startDate = new Date(effectiveStartForMonth);
-  const endDate = new Date(effectiveEndForMonth);
-  const diffTime = endDate.getTime() - startDate.getTime();
-  const eligibleDays = Math.max(0, Math.round(diffTime / (1000 * 3600 * 24)) + 1);
+  // 1. Working Days Method
+  if (billableDaysMethod === 'working_days') {
+    const totalWorkingDaysInMonth = calculateWorkingDays(monthStartStr, monthEndStr);
+    const eligibleWorkingDays = calculateWorkingDays(effectiveStartForMonth, effectiveEndForMonth);
+
+    if (eligibleWorkingDays >= totalWorkingDaysInMonth && totalWorkingDaysInMonth > 0) {
+      return {
+        eligibleDays: totalWorkingDaysInMonth,
+        totalDaysInMonth: totalWorkingDaysInMonth,
+        eligibleAmount: monthlyBillingRate,
+        isFullMonth: true,
+        prorationApplied: false,
+        effectiveStartDateStr: monthStartStr,
+        effectiveEndDateStr: monthEndStr,
+      };
+    }
+
+    const eligibleAmount = totalWorkingDaysInMonth > 0
+      ? Math.round((monthlyBillingRate * eligibleWorkingDays) / totalWorkingDaysInMonth)
+      : 0;
+
+    return {
+      eligibleDays: eligibleWorkingDays,
+      totalDaysInMonth: totalWorkingDaysInMonth,
+      eligibleAmount,
+      isFullMonth: false,
+      prorationApplied: true,
+      effectiveStartDateStr: effectiveStartForMonth,
+      effectiveEndDateStr: effectiveEndForMonth,
+    };
+  }
+
+  // 2. Manual Billable Days Method
+  if (billableDaysMethod === 'manual' && typeof manualBillableDays === 'number' && manualBillableDays > 0) {
+    const periodCalendarDays = calculateCalendarDays(assignedFrom, effectiveEnd);
+    const monthCalendarDays = calculateCalendarDays(effectiveStartForMonth, effectiveEndForMonth);
+
+    // If assignment period spans multiple months, attribute proportionally to this month
+    const eligibleDays = periodCalendarDays <= totalDaysInMonth
+      ? Math.min(manualBillableDays, totalDaysInMonth)
+      : Math.min(Math.round((manualBillableDays * monthCalendarDays) / periodCalendarDays), totalDaysInMonth);
+
+    if (eligibleDays >= totalDaysInMonth) {
+      return {
+        eligibleDays: totalDaysInMonth,
+        totalDaysInMonth,
+        eligibleAmount: monthlyBillingRate,
+        isFullMonth: true,
+        prorationApplied: false,
+        effectiveStartDateStr: monthStartStr,
+        effectiveEndDateStr: monthEndStr,
+      };
+    }
+
+    const eligibleAmount = Math.round((monthlyBillingRate * eligibleDays) / totalDaysInMonth);
+
+    return {
+      eligibleDays,
+      totalDaysInMonth,
+      eligibleAmount,
+      isFullMonth: false,
+      prorationApplied: true,
+      effectiveStartDateStr: effectiveStartForMonth,
+      effectiveEndDateStr: effectiveEndForMonth,
+    };
+  }
+
+  // 3. Calendar Days Method (Default)
+  const eligibleDays = calculateCalendarDays(effectiveStartForMonth, effectiveEndForMonth);
 
   if (eligibleDays >= totalDaysInMonth) {
     return {
@@ -360,6 +493,7 @@ export interface EmployeeEligibleBillingItem {
   status: string;
   effectiveTerminationDate?: string;
   terminationReason?: string;
+  billableDaysMethod?: BillableDaysMethod;
 }
 
 /**
@@ -370,8 +504,9 @@ export function getPOEmployeeEligibleBillingForMonth(params: {
   assignments: EmployeeAssignment[];
   billingYear: number;
   billingMonth: number | string;
+  asOfDate?: string;
 }): EmployeeEligibleBillingItem[] {
-  const { poId, assignments, billingYear, billingMonth } = params;
+  const { poId, assignments, billingYear, billingMonth, asOfDate } = params;
 
   const poAssignments = assignments.filter((a) => a.poId === poId);
 
@@ -384,7 +519,12 @@ export function getPOEmployeeEligibleBillingForMonth(params: {
       effectiveTerminationDate: asgn.effectiveTerminationDate,
       billingYear,
       billingMonth,
+      billableDaysMethod: asgn.billableDaysMethod,
+      manualBillableDays: asgn.manualBillableDays,
     });
+
+    const isExpired = isPOAssignmentExpired(asgn.assignedTo, asOfDate);
+    const effectiveStatus = asgn.status === 'Terminated' ? 'Terminated' : isExpired ? 'Inactive' : asgn.status || 'Active';
 
     return {
       assignmentId: asgn.id,
@@ -397,9 +537,10 @@ export function getPOEmployeeEligibleBillingForMonth(params: {
       eligibleAmount: proration.eligibleAmount,
       isFullMonth: proration.isFullMonth,
       prorationApplied: proration.prorationApplied,
-      status: asgn.status,
+      status: effectiveStatus,
       effectiveTerminationDate: asgn.effectiveTerminationDate,
       terminationReason: asgn.terminationReason,
+      billableDaysMethod: asgn.billableDaysMethod || 'calendar',
     };
   });
 }

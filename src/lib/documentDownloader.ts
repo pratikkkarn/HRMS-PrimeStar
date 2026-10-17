@@ -1,16 +1,17 @@
 import { jsPDF } from 'jspdf';
-import { PurchaseOrder, Invoice } from '../types/domain';
-import { formatINR, formatDate } from './utils';
+import { PurchaseOrder, Invoice, ProformaInvoice } from '../types/domain';
+import { formatINR, formatDate, numberToWordsINR } from './utils';
 
 export interface DownloadDocOptions {
-  filename: string;
-  documentType?: 'sow' | 'po' | 'quotation' | 'invoice' | 'payslip' | 'generic';
+  filename?: string;
+  documentType?: 'sow' | 'po' | 'quotation' | 'invoice' | 'payslip' | 'proforma' | 'generic';
   title?: string;
   po?: PurchaseOrder;
   sowNumber?: string;
   quotationNumber?: string;
   invoiceNumber?: string;
   invoice?: Invoice;
+  proforma?: ProformaInvoice;
   file?: File | Blob | Uint8Array | null;
   fileUrl?: string | null;
   employeeName?: string;
@@ -39,9 +40,10 @@ export const buildJsPdfDocument = (options: DownloadDocOptions): jsPDF => {
     takeHomeAmount,
   } = options;
 
-  const cleanFilename = filename.trim().endsWith('.pdf') || filename.includes('.')
-    ? filename.trim()
-    : `${filename.trim()}.pdf`;
+  const rawFilename = filename || (options.proforma ? `${options.proforma.proformaNumber.replace(/[\/\\]/g, '_')}.pdf` : 'document.pdf');
+  const cleanFilename = rawFilename.trim().endsWith('.pdf') || rawFilename.includes('.')
+    ? rawFilename.trim()
+    : `${rawFilename.trim()}.pdf`;
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -72,6 +74,8 @@ export const buildJsPdfDocument = (options: DownloadDocOptions): jsPDF => {
       ? 'COMMERCIAL QUOTATION'
       : documentType === 'payslip'
       ? 'SALARY PAYSLIP STATEMENT'
+      : documentType === 'proforma'
+      ? 'PROFORMA INVOICE'
       : cleanFilename.toUpperCase().replace(/_/g, ' ').replace('.PDF', ''));
 
   doc.text(docHeaderTitle, 14, 28);
@@ -374,7 +378,286 @@ export const buildJsPdfDocument = (options: DownloadDocOptions): jsPDF => {
 
     y += 8;
   }
-  // --- CASE F: GENERIC OFFICIAL DOCUMENT ---
+  // --- CASE F: PROFORMA INVOICE (MATCHING ENTERPRISE EXCEL REFERENCE LAYOUT) ---
+  else if (documentType === 'proforma' || options.proforma || cleanFilename.toLowerCase().includes('proforma')) {
+    const prof = options.proforma;
+    const profNum = prof?.proformaNumber || cleanFilename.replace('.pdf', '');
+    const versionLabel = prof ? `v${prof.version}` : 'v1';
+
+    const clientName = po?.projectName?.includes('HPE')
+      ? 'Hewlett Packard Enterprise India Pvt. Ltd.'
+      : po?.projectName?.includes('HDFC')
+      ? 'HDFC Bank Ltd.'
+      : po?.projectName?.includes('Infosys')
+      ? 'Infosys Ltd.'
+      : po?.projectName || 'Enterprise Client Ltd.';
+
+    // Outer frame border (like Excel worksheet border)
+    doc.setDrawColor(30, 41, 59);
+    doc.setLineWidth(0.4);
+    doc.rect(10, 10, 190, 277);
+
+    // Header Background Accent Bar
+    doc.setFillColor(30, 41, 59);
+    doc.rect(10, 10, 190, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text('PRIME STAR CONSULTING SERVICES — OFFICIAL PROFORMA INVOICE', 14, 15.5);
+
+    let curY = 24;
+
+    // Company Logo & Details (Left side)
+    doc.setFillColor(37, 99, 235); // blue-600
+    doc.roundedRect(14, curY - 4, 7, 7, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text('*', 16.5, curY + 1.2);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(11);
+    doc.text('PRIME STAR CONSULTING SERVICES PVT. LTD.', 24, curY);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Prestige Tech Park, Outer Ring Road, Marathahalli, Bengaluru, KA 560103', 14, curY + 5);
+    doc.text('GSTIN: 29AABCP1234F1Z5 | PAN: ABCPS1234F | State: Karnataka (29)', 14, curY + 9);
+    doc.text('Email: billing@primestarconsulting.com | Tel: +91 80 4000 8888', 14, curY + 13);
+
+    // Proforma Info Box (Right side)
+    doc.setFillColor(248, 250, 252);
+    doc.rect(125, curY - 5, 71, 23, 'F');
+    doc.setDrawColor(203, 213, 225);
+    doc.rect(125, curY - 5, 71, 23);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(79, 70, 229);
+    doc.text(`PROFORMA: ${profNum}`, 128, curY);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(51, 65, 85);
+    doc.text(`Date: ${formatDate(prof?.updatedAt || new Date().toISOString())}`, 128, curY + 4.5);
+    doc.text(`PO Ref: ${prof?.poNumber || po?.poNumber || 'PO-2025-8891'}`, 128, curY + 8.5);
+    doc.text(`Revision: ${versionLabel} (${prof?.status || 'Draft'})`, 128, curY + 12.5);
+    doc.text('Payment Terms: Net 30 Days', 128, curY + 16.5);
+
+    curY += 22;
+    doc.setDrawColor(30, 41, 59);
+    doc.line(10, curY, 200, curY);
+
+    // Buyer & Resource Info Section (2 Columns)
+    curY += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text('BILLED TO (CLIENT / BUYER):', 14, curY);
+    doc.text('RESOURCE & BILLING DETAILS:', 108, curY);
+    curY += 4.5;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(clientName, 14, curY);
+
+    doc.text(`Consultant: ${prof?.employeeName || 'Assigned Consultant'} (${prof?.employeeId || 'PS-108'})`, 108, curY);
+    curY += 4;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(po?.billingAddress || 'Corporate Office, Electronic City, Bengaluru, KA', 14, curY);
+    doc.text(`Role: ${prof?.designation || 'Senior Technical Consultant'}`, 108, curY);
+    curY += 4;
+
+    doc.text(`Project: ${po?.projectName || 'Enterprise Consulting'}`, 14, curY);
+    const startStr = prof?.billingPeriodStart ? formatDate(prof.billingPeriodStart) : '01-Oct-2026';
+    const endStr = prof?.billingPeriodEnd ? formatDate(prof.billingPeriodEnd) : '31-Oct-2026';
+    doc.text(`Billing Period: ${startStr} to ${endStr}`, 108, curY);
+    curY += 4;
+
+    const bMethod = prof?.billableDaysMethod === 'working_days'
+      ? `Working Days (${prof.billableDays || 0}d)`
+      : prof?.billableDaysMethod === 'manual'
+      ? `Manual (${prof.billableDays || 0}d)`
+      : 'Calendar Days';
+    doc.text(`Method: ${bMethod}`, 108, curY);
+    curY += 3;
+
+    doc.setDrawColor(30, 41, 59);
+    doc.line(10, curY, 200, curY);
+
+    // Line Items Table Header
+    doc.setFillColor(241, 245, 249);
+    doc.rect(10, curY, 190, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Sl.', 14, curY + 4.8);
+    doc.text('Description of Services / Deliverables', 24, curY + 4.8);
+    doc.text('HSN/SAC', 112, curY + 4.8);
+    doc.text('Qty / Days', 133, curY + 4.8);
+    doc.text('Rate (INR)', 155, curY + 4.8);
+    doc.text('Amount (INR)', 180, curY + 4.8);
+
+    curY += 7;
+    doc.line(10, curY, 200, curY);
+
+    // Line items data
+    const items = prof?.lineItems && prof.lineItems.length > 0
+      ? prof.lineItems
+      : [
+          {
+            id: 'li-default',
+            description: prof?.notes || 'Technical and cloud engineering milestone deliverables',
+            quantity: prof?.billableDays || 1,
+            rate: prof?.amountExclGst || 100000,
+            amount: prof?.amountExclGst || 100000,
+            hsnSac: '998313',
+          },
+        ];
+
+    items.forEach((item, idx) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(51, 65, 85);
+      doc.text(String(idx + 1), 15, curY + 5);
+
+      const desc = item.description.length > 50 ? item.description.substring(0, 47) + '...' : item.description;
+      doc.text(desc, 24, curY + 5);
+      doc.text(item.hsnSac || '998313', 113, curY + 5);
+      doc.text(String(item.quantity), 138, curY + 5);
+      doc.text(formatINR(item.rate), 156, curY + 5);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text(formatINR(item.amount), 180, curY + 5);
+
+      curY += 7;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(10, curY, 200, curY);
+    });
+
+    // Subtotal and Tax Calculations
+    const amtExcl = prof?.amountExclGst ?? 100000;
+    const gstRate = prof?.gstRate ?? 18;
+    const cgstRate = gstRate / 2;
+    const sgstRate = gstRate / 2;
+    const cgstAmount = Math.round(amtExcl * (cgstRate / 100));
+    const sgstAmount = Math.round(amtExcl * (sgstRate / 100));
+    const totalAmt = prof?.totalAmountInclGst ?? (amtExcl + cgstAmount + sgstAmount);
+
+    doc.setDrawColor(30, 41, 59);
+    doc.line(10, curY, 200, curY);
+
+    // Bottom Box: Amount in Words on Left, Tax Totals on Right
+    const bottomBoxY = curY;
+    doc.line(125, bottomBoxY, 125, bottomBoxY + 36);
+
+    // Left: Amount in words & terms
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text('AMOUNT CHARGEABLE (IN WORDS):', 14, bottomBoxY + 6);
+
+    doc.setFont('helvetica', 'bolditalic');
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    const words = numberToWordsINR(totalAmt);
+    doc.text(doc.splitTextToSize(words, 105), 14, bottomBoxY + 11);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Proforma Notice: Pre-billing milestone estimate; does not debit client PO balance.', 14, bottomBoxY + 28);
+    doc.text('Payment terms: Net 30 days upon formal invoice issuance.', 14, bottomBoxY + 32);
+
+    // Right: Tax Breakdown
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Taxable Subtotal:', 128, bottomBoxY + 6);
+    doc.text(formatINR(amtExcl), 175, bottomBoxY + 6);
+
+    doc.text(`CGST @ ${cgstRate}%:`, 128, bottomBoxY + 12);
+    doc.text(formatINR(cgstAmount), 175, bottomBoxY + 12);
+
+    doc.text(`SGST @ ${sgstRate}%:`, 128, bottomBoxY + 18);
+    doc.text(formatINR(sgstAmount), 175, bottomBoxY + 18);
+
+    doc.setFillColor(238, 242, 255);
+    doc.rect(125, bottomBoxY + 24, 75, 12, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 27, 75);
+    doc.text('Total Proforma (INR):', 128, bottomBoxY + 31.5);
+    doc.text(formatINR(totalAmt), 174, bottomBoxY + 31.5);
+
+    curY = bottomBoxY + 36;
+    doc.setDrawColor(30, 41, 59);
+    doc.line(10, curY, 200, curY);
+
+    // Bank Details & Declaration Box (Lower)
+    const bankBoxY = curY;
+    doc.line(108, bankBoxY, 108, bankBoxY + 38);
+
+    // Bank Details (Left)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('COMPANY BANK REMITTANCE DETAILS:', 14, bankBoxY + 6);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Bank Name: HDFC Bank Ltd.', 14, bankBoxY + 12);
+    doc.text('A/C Name: Prime Star Consulting Services Pvt. Ltd.', 14, bankBoxY + 17);
+    doc.text('A/C Number: 50200084920192 (Current Account)', 14, bankBoxY + 22);
+    doc.text('IFSC Code: HDFC0000128 | Branch: Koramangala 4th Block, Bengaluru', 14, bankBoxY + 27);
+
+    // Declaration & Signatory (Right)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('DECLARATION & AUTHORIZED SIGNATORY:', 112, bankBoxY + 6);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('We declare that this proforma invoice shows the actual price of services described.', 112, bankBoxY + 11);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('For PRIME STAR CONSULTING SERVICES PVT. LTD.', 112, bankBoxY + 18);
+
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(112, bankBoxY + 22, 50, 6, 1, 1, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(79, 70, 229);
+    doc.text('DIGITALLY AUTHENTICATED PRE-BILL', 115, bankBoxY + 26);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Authorized Signatory · Bengaluru HQ', 112, bankBoxY + 34);
+
+    curY = bankBoxY + 38;
+    doc.setDrawColor(30, 41, 59);
+    doc.line(10, curY, 200, curY);
+
+    // Footnote
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Subject to Bengaluru Jurisdiction · Generated by Prime Star HRMS Financial Operations', 60, 284);
+
+    return doc;
+  }
+  // --- CASE G: GENERIC OFFICIAL DOCUMENT ---
   else {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
@@ -481,9 +764,10 @@ export const getDocumentSource = (
   options: DownloadDocOptions
 ): { url?: string; file?: Blob; isRealFile: boolean; cleanFilename: string } => {
   const { filename, file, fileUrl } = options;
-  const cleanFilename = filename.trim().endsWith('.pdf') || filename.includes('.')
-    ? filename.trim()
-    : `${filename.trim()}.pdf`;
+  const rawFilename = filename || (options.proforma ? `${options.proforma.proformaNumber.replace(/[\/\\]/g, '_')}.pdf` : 'document.pdf');
+  const cleanFilename = rawFilename.trim().endsWith('.pdf') || rawFilename.includes('.')
+    ? rawFilename.trim()
+    : `${rawFilename.trim()}.pdf`;
 
   if (file) {
     if (file instanceof Blob) {
@@ -554,4 +838,29 @@ export const downloadDocument = async (options: DownloadDocOptions): Promise<voi
     console.error('Download Document Error:', err);
     alert(`Download Failed: ${err?.message || 'Unable to download PDF file.'}`);
   }
+};
+
+/**
+ * Downloads a formatted Proforma Invoice PDF.
+ */
+export const downloadProformaPdf = async (proforma: ProformaInvoice): Promise<void> => {
+  const cleanFilename = `${proforma.proformaNumber.replace(/[\/\\]/g, '_')}_v${proforma.version}.pdf`;
+  const doc = buildJsPdfDocument({
+    filename: cleanFilename,
+    documentType: 'proforma',
+    title: `PROFORMA INVOICE: ${proforma.proformaNumber}`,
+    proforma,
+    employeeName: proforma.employeeName,
+    employeeId: proforma.employeeId,
+  });
+
+  const blob = doc.output('blob');
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = cleanFilename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 };
