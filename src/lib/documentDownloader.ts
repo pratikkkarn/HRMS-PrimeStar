@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { PurchaseOrder, Invoice, ProformaInvoice } from '../types/domain';
 import { formatINR, formatDate, numberToWordsINR } from './utils';
+import { getOfficialLogoPngDataUrl } from './logoUtils';
 
 export interface DownloadDocOptions {
   filename?: string;
@@ -407,17 +408,19 @@ export const buildJsPdfDocument = (options: DownloadDocOptions): jsPDF => {
 
     let curY = 24;
 
-    // Company Logo & Details (Left side)
-    doc.setFillColor(37, 99, 235); // blue-600
-    doc.roundedRect(14, curY - 4, 7, 7, 1.5, 1.5, 'F');
+    // Official Prime Star Branding Logo (Left side)
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.text('*', 16.5, curY + 1.2);
+    doc.setFontSize(13);
+    doc.setTextColor(211, 47, 47); // Brand Red for PRIME
+    doc.text('PRIME', 14, curY);
+    doc.setTextColor(13, 71, 161); // Brand Blue for STAR
+    doc.text('STAR', 32, curY);
 
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(11);
-    doc.text('PRIME STAR CONSULTING SERVICES PVT. LTD.', 24, curY);
+    doc.setFontSize(7);
+    doc.setTextColor(13, 71, 161);
+    doc.text('CONSULTING', 14, curY + 4);
+    doc.setTextColor(211, 47, 47);
+    doc.text('SERVICES (P) LTD', 38, curY + 4);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);

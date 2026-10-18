@@ -3,6 +3,7 @@ import { useRole } from '../../context/RoleContext';
 import { UserRole } from '../../types/roles';
 import { User, FileText, DollarSign, Clock, Shield, LogOut, ChevronRight, LayoutDashboard } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { PrimeStarLogo } from '../common/PrimeStarLogo';
 
 interface PortalLayoutProps {
   currentTab: string;
@@ -69,14 +70,13 @@ export const PortalLayout: React.FC<PortalLayoutProps> = ({ currentTab, onNaviga
       <header className="bg-white border-b border-slate-200 shadow-2xs">
         <div className="max-w-6xl mx-auto px-4 lg:px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-xl shadow-sm">
-              ★
-            </div>
+            <PrimeStarLogo size="md" />
+            <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
             <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-tight">
-                PRIME STAR — EMPLOYEE PORTAL
+              <h1 className="text-xs font-bold text-slate-800 tracking-wider uppercase">
+                EMPLOYEE PORTAL
               </h1>
-              <p className="text-xs text-slate-500 font-medium">Self-Service Workforce Workspace</p>
+              <p className="text-[10px] text-slate-500 font-medium">Self-Service Workforce Workspace</p>
             </div>
           </div>
 

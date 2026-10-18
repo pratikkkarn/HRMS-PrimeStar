@@ -2,6 +2,7 @@ import React from 'react';
 import { PurchaseOrder, ProformaInvoice, ProformaLineItem } from '../../../types/domain';
 import { formatINR, formatDate, numberToWordsINR } from '../../../lib/utils';
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
+import { PrimeStarLogo } from '../../common/PrimeStarLogo';
 
 export interface ProformaDocumentTemplateProps {
   proforma: Partial<ProformaInvoice> & {
@@ -102,18 +103,8 @@ export const ProformaDocumentTemplate: React.FC<ProformaDocumentTemplateProps> =
         <div className="grid grid-cols-12 divide-x divide-slate-800">
           {/* COMPANY / SUPPLIER LOGO & DETAILS (LEFT 7 COLS) */}
           <div className="col-span-7 p-3.5 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-xs border border-blue-700 shrink-0">
-                ★
-              </div>
-              <div>
-                <h1 className="font-black text-sm tracking-tight text-slate-900 leading-none">
-                  {companyInfo.name}
-                </h1>
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                  Enterprise IT & Cloud Consulting Services
-                </span>
-              </div>
+            <div className="flex items-center gap-3">
+              <PrimeStarLogo size="md" />
             </div>
 
             <div className="text-[10px] text-slate-600 leading-relaxed pt-1">

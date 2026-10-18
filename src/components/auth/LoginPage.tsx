@@ -3,6 +3,7 @@ import { Eye, EyeOff, FileText, UserPlus, CreditCard } from 'lucide-react';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { MicrosoftSsoModal } from './MicrosoftSsoModal';
 import { UserRole, DEMO_USERS, UserProfile } from '../../types/roles';
+import { PrimeStarLogo } from '../common/PrimeStarLogo';
 
 interface LoginPageProps {
   onLoginSuccess: (userRole: UserRole, userProfile: UserProfile) => void;
@@ -85,18 +86,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         ></div>
 
         {/* TOP BRAND LOCKUP */}
-        <div className="relative z-10 flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/90 text-white flex items-center justify-center font-black text-lg shadow-lg shadow-blue-500/20 border border-blue-400/30">
-            ★
-          </div>
-          <div>
-            <span className="text-sm font-bold tracking-tight block leading-tight text-white">
-              PRIME STAR
-            </span>
-            <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest block">
-              CONSULTING SERVICES
-            </span>
-          </div>
+        <div className="relative z-10 flex items-center gap-3">
+          <PrimeStarLogo variant="dark-bg" size="lg" />
         </div>
 
         {/* MIDDLE HERO HEADLINE & CARDS */}
@@ -163,17 +154,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           {/* LOGO & HEADING */}
           <div className="space-y-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
-                ★
-              </div>
-              <div>
-                <span className="text-xs font-bold text-slate-900 tracking-tight block leading-none">
-                  PRIME STAR
-                </span>
-                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider block mt-0.5">
-                  HR MANAGEMENT SYSTEM
-                </span>
-              </div>
+              <PrimeStarLogo size="md" />
             </div>
 
             <div>

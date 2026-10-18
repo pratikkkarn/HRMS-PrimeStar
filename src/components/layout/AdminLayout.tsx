@@ -26,6 +26,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { PrimeStarLogo } from '../common/PrimeStarLogo';
 
 interface AdminLayoutProps {
   currentTab: string;
@@ -149,18 +150,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         {/* DESKTOP SIDEBAR (~250px WIDE, DARK NAVY) */}
         <aside className="hidden lg:flex w-[250px] bg-[#070E20] text-slate-300 border-r border-slate-800/80 flex-col shrink-0 z-30 select-none">
           {/* BRAND LOGO HEADER */}
-          <div className="p-4 border-b border-slate-800/80 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-blue-500/20">
-              ★
-            </div>
-            <div>
-              <span className="text-sm font-bold text-white tracking-tight block leading-none">
-                PRIME STAR
-              </span>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mt-0.5">
-                HR MANAGEMENT SYSTEM
-              </span>
-            </div>
+          <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+            <PrimeStarLogo variant="dark-bg" size="sm" />
           </div>
 
           {/* GROUPED SIDEBAR NAVIGATION */}
@@ -375,7 +366,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           ></div>
           <div className="relative flex-1 max-w-xs w-full bg-[#070E20] text-slate-200 flex flex-col p-4 shadow-2xl z-10">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <span className="font-bold text-white text-sm">PRIME STAR HRMS</span>
+              <PrimeStarLogo variant="dark-bg" size="sm" />
               <button onClick={() => setMobileMenuOpen(false)} className="p-1 text-slate-400 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
